@@ -31,11 +31,42 @@ static BOOL MDWriteAll(int fd, const char *bytes, size_t length) {
 	return YES;
 }
 
+@interface MDHelperClient ()
++ (nullable NSDictionary *)sendOperation:(NSDictionary *)operation
+								progress:(nullable void (^)(NSString *status))progress
+								   error:(NSError **)error;
+@end
+
 @implementation MDHelperClient
 
 + (nullable NSDictionary *)runOperation:(NSDictionary *)operation
 							   progress:(nullable void (^)(NSString *status))progress
 								  error:(NSError **)error {
+	// A stale daemon can be killed by iOS when its binary is replaced during an
+	// upgrade. Retry once so the just-restarted daemon handles the request.
+	for (NSInteger attempt = 0; attempt < 2; attempt++) {
+		NSError *attemptError = nil;
+		NSDictionary *result = [self sendOperation:operation progress:progress error:&attemptError];
+		if (result || !attemptError) {
+			return result;
+		}
+		NSString *message = attemptError.localizedDescription ?: @"";
+		BOOL transient = [message containsString:@"closed the connection"] ||
+						 [message containsString:@"connection failed"];
+		if (!transient || attempt == 1) {
+			if (error) {
+				*error = attemptError;
+			}
+			return nil;
+		}
+		usleep(500000);
+	}
+	return nil;
+}
+
++ (nullable NSDictionary *)sendOperation:(NSDictionary *)operation
+								progress:(nullable void (^)(NSString *status))progress
+								   error:(NSError **)error {
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (fd < 0) {
 		if (error) {

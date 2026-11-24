@@ -103,6 +103,7 @@ OGG, Opus, WMA, APE, and other formats that iOS Music cannot decode are rejected
 - `/var/mobile/Media/MusicDrop/artwork/` — generated/resized artwork
 - `/var/mobile/Media/MusicDrop/downloads/` — URL download outputs
 - `/var/mobile/Media/MusicDrop/tmp/` — temporary conversion files
+- `/var/mobile/Media/MusicDrop/bin/` — downloaded yt-dlp binary
 - `/var/mobile/Media/MusicDrop/musicdrop.log` — log file
 
 Input, artwork, downloads, and temporary files are pruned after seven days. The log rotates to `musicdrop.log.old` at 1 MB.

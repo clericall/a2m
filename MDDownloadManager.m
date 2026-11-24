@@ -229,14 +229,14 @@ static NSInteger MDRunTool(NSArray<NSString *> *arguments) {
 
 /// Keeps a current self-contained yt-dlp binary in the writable MusicDrop
 /// folder. The packaged yt-dlp is usually years old and fails on YouTube.
-static BOOL MDRefreshYouTubeBinary(void) {
+static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 	NSFileManager *manager = [NSFileManager defaultManager];
 	NSError *directoryError = nil;
 	if (![manager createDirectoryAtPath:MDYouTubeToolsDirectory
 			withIntermediateDirectories:YES
 						attributes:@{NSFileProtectionKey: NSFileProtectionNone}
 							 error:&directoryError]) {
-		MDLog(@"Lyrics/Download: could not create bin directory: %@", directoryError.localizedDescription);
+		MDLog(@"YouTube: could not create bin directory: %@", directoryError.localizedDescription);
 		return NO;
 	}
 
@@ -245,19 +245,25 @@ static BOOL MDRefreshYouTubeBinary(void) {
 	BOOL fresh = [manager isExecutableFileAtPath:MDYouTubeBinaryPath] &&
 				 modified && modified.timeIntervalSinceNow > -(7 * 24 * 60 * 60);
 	if (fresh) {
+		MDLog(@"YouTube: using cached yt-dlp");
 		return YES;
 	}
 
+	MDLog(@"YouTube: downloading current yt-dlp");
+	MDReportProgress(progress, @"Downloading current yt-dlp…");
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:MDYouTubeBinaryURL]
 													  cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
-												  timeoutInterval:180.0];
-	[request setValue:@"MusicDrop/1.4" forHTTPHeaderField:@"User-Agent"];
+													  timeoutInterval:180.0];
+	[request setValue:@"MusicDrop/1.5" forHTTPHeaderField:@"User-Agent"];
 
-	__block NSData *download = nil;
+	__block NSURL *downloadedFile = nil;
+	__block NSError *downloadError = nil;
 	dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-	NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
-		completionHandler:^(NSData *data, __unused NSURLResponse *response, __unused NSError *error) {
-		download = data;
+	NSURLSession *session = [NSURLSession sharedSession];
+	NSURLSessionDownloadTask *task = [session downloadTaskWithRequest:request
+		completionHandler:^(NSURL *location, __unused NSURLResponse *response, NSError *error) {
+		downloadedFile = location;
+		downloadError = error;
 		dispatch_semaphore_signal(semaphore);
 	}];
 	[task resume];
@@ -267,14 +273,22 @@ static BOOL MDRefreshYouTubeBinary(void) {
 		MDLog(@"YouTube: timed out downloading yt-dlp.");
 		return NO;
 	}
-	if (download.length < 5 * 1024 * 1024 || download.length > 100 * 1024 * 1024) {
-		MDLog(@"YouTube: refusing suspicious yt-dlp download (%lu bytes).", (unsigned long)download.length);
+	if (downloadError || !downloadedFile) {
+		MDLog(@"YouTube: yt-dlp download error: %@", downloadError.localizedDescription);
+		return NO;
+	}
+
+	NSDictionary *downloadAttributes = [manager attributesOfItemAtPath:downloadedFile.path error:nil];
+	unsigned long long size = [downloadAttributes[NSFileSize] unsignedLongLongValue];
+	if (size < 5 * 1024 * 1024 || size > 100 * 1024 * 1024) {
+		MDLog(@"YouTube: refusing suspicious yt-dlp download (%llu bytes).", size);
 		return NO;
 	}
 
 	NSString *temporaryPath = [MDYouTubeToolsDirectory stringByAppendingPathComponent:
 		[NSString stringWithFormat:@"yt-dlp.%@.download", [NSUUID UUID].UUIDString]];
-	if (![download writeToFile:temporaryPath atomically:YES]) {
+	if (![manager moveItemAtURL:downloadedFile toURL:[NSURL fileURLWithPath:temporaryPath] error:nil]) {
+		MDLog(@"YouTube: could not move downloaded yt-dlp into place.");
 		return NO;
 	}
 	chmod(temporaryPath.UTF8String, 0755);
@@ -285,6 +299,8 @@ static BOOL MDRefreshYouTubeBinary(void) {
 	if (ldid) {
 		NSInteger status = MDRunTool(@[ldid, @"-S", temporaryPath]);
 		MDLog(@"YouTube: ldid status %ld", (long)status);
+	} else {
+		MDLog(@"YouTube: ldid not found; attempting unsigned binary");
 	}
 
 	NSError *replaceError = nil;
@@ -299,12 +315,13 @@ static BOOL MDRefreshYouTubeBinary(void) {
 		[manager removeItemAtPath:temporaryPath error:nil];
 		return NO;
 	}
-	MDLog(@"YouTube: installed yt-dlp (%lu bytes)", (unsigned long)download.length);
+	MDLog(@"YouTube: installed yt-dlp (%llu bytes)", size);
+	MDReportProgress(progress, @"yt-dlp ready.");
 	return YES;
 }
 
-static NSArray<NSString *> *MDYouTubeLauncher(void) {
-	if (MDRefreshYouTubeBinary()) {
+static NSArray<NSString *> *MDYouTubeLauncher(MDDownloadProgressBlock progress) {
+	if (MDRefreshYouTubeBinary(progress)) {
 		return @[MDYouTubeBinaryPath];
 	}
 	NSString *installed = MDExecutableAtPaths(@[
@@ -540,10 +557,10 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 	}
 
 	MDReportProgress(progress, @"Preparing yt-dlp…");
-	NSArray<NSString *> *launcher = MDYouTubeLauncher();
+	NSArray<NSString *> *launcher = MDYouTubeLauncher(progress);
 	if (!launcher) {
 		MDFinishDownload(completion, nil, MDDownloadError(40,
-			@"Could not prepare yt-dlp. Check your connection to GitHub, or install a rootless yt-dlp package. You can still download into Files elsewhere and use Import Files."));
+			@"Could not prepare yt-dlp. Check your connection to GitHub (the log has details), then try again. You can also download into Files elsewhere and use Import Files."));
 		return;
 	}
 

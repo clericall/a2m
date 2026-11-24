@@ -28,6 +28,13 @@ if [ -z "$LAUNCHCTL_BIN" ]; then
 		fi
 	done
 fi
+KILLALL_BIN="$(command -v killall 2>/dev/null || true)"
+if [ -z "$KILLALL_BIN" ] && [ -x /var/jb/usr/bin/killall ]; then
+	KILLALL_BIN=/var/jb/usr/bin/killall
+fi
+if [ -n "$KILLALL_BIN" ]; then
+	"$KILLALL_BIN" -9 musicdropd 2>/dev/null || true
+fi
 if [ -n "$LAUNCHCTL_BIN" ] && [ -f "$DAEMON_PLIST" ]; then
 	"$LAUNCHCTL_BIN" bootout system "$DAEMON_PLIST" 2>/dev/null || true
 	"$LAUNCHCTL_BIN" bootstrap system "$DAEMON_PLIST" 2>/dev/null || \
@@ -35,10 +42,6 @@ if [ -n "$LAUNCHCTL_BIN" ] && [ -f "$DAEMON_PLIST" ]; then
 fi
 
 # Relaunch Music so MobileSubstrate injects the tweak on next open.
-KILLALL_BIN="$(command -v killall 2>/dev/null || true)"
-if [ -z "$KILLALL_BIN" ] && [ -x /var/jb/usr/bin/killall ]; then
-	KILLALL_BIN=/var/jb/usr/bin/killall
-fi
 if [ -n "$KILLALL_BIN" ]; then
 	"$KILLALL_BIN" -9 Music 2>/dev/null || true
 fi
