@@ -13,7 +13,7 @@ MusicDrop_LDFLAGS = -Wl,-segalign,4000
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 TOOL_NAME = musicdropd
-musicdropd_FILES = musicdropd.m MDDownloadManager.m MDHelperClient.m MDLyrics.m MDLog.m
+musicdropd_FILES = musicdropd.m MDDownloadManager.m MDHelperClient.m MDLyrics.m MDPreferences.m MDLog.m
 musicdropd_FRAMEWORKS = Foundation
 musicdropd_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 
