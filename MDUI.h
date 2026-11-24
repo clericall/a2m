@@ -38,7 +38,7 @@ typedef NS_ENUM(NSInteger, MDMenuAction) {
 					 title:(NSString *)title
 				   message:(NSString *)message
 				   success:(BOOL)success
-					handler:(void (^)(void))handler;
+					handler:(nullable void (^)(void))handler;
 
 + (void)showSettingsInWindow:(UIWindow *)window;
 + (void)showHelpInWindow:(UIWindow *)window;
