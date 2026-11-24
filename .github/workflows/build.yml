@@ -54,20 +54,10 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x layout/DEBIAN/postinst layout/DEBIAN/postrm
-          make clean 2>&1 | tee /tmp/musicdrop-build.log
-          make package FINALPACKAGE=1 2>&1 | tee -a /tmp/musicdrop-build.log
+          make clean
+          make package FINALPACKAGE=1
           ls -lh packages
           test -n "$(find packages -maxdepth 1 -name '*.deb' -print -quit)"
-
-      - name: Dump build log on failure
-        if: failure()
-        run: |
-          { echo "RUN $GITHUB_RUN_ID $GITHUB_SHA"; cat /tmp/musicdrop-build.log; } > docs/build-error.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f docs/build-error.txt
-          git commit -m "Upload build error log [skip ci]" || true
-          git push origin "HEAD:${GITHUB_REF_NAME}" || true
 
       - name: Generate repository index
         run: |
