@@ -196,39 +196,11 @@ static NSString *MDExecutableAtPaths(NSArray<NSString *> *paths) {
 
 static NSString *const MDYouTubeToolsDirectory = @"/var/mobile/Media/MusicDrop/bin";
 static NSString *const MDYouTubeBinaryPath = @"/var/mobile/Media/MusicDrop/bin/yt-dlp";
-static NSString *const MDYouTubeBinaryURL = @"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+static NSString *const MDYouTubeBinaryURL = @"https://github.com/yt-dlp/yt-dlp/releases/download/2025.10.14/yt-dlp";
 
-/// Runs a tool without capturing output. Used for ldid signing.
-static NSInteger MDRunTool(NSArray<NSString *> *arguments) {
-	char **argv = calloc(arguments.count + 1, sizeof(char *));
-	if (!argv) {
-		return -1;
-	}
-	for (NSUInteger index = 0; index < arguments.count; index++) {
-		argv[index] = (char *)arguments[index].UTF8String;
-	}
-
-	posix_spawn_file_actions_t actions;
-	posix_spawn_file_actions_init(&actions);
-	posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
-
-	pid_t process = 0;
-	int result = posix_spawn(&process, arguments[0].fileSystemRepresentation,
-							 &actions, NULL, argv, NULL);
-	posix_spawn_file_actions_destroy(&actions);
-	free(argv);
-	if (result != 0) {
-		return -1;
-	}
-
-	int status = 0;
-	while (waitpid(process, &status, 0) < 0 && errno == EINTR) {
-	}
-	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-}
-
-/// Keeps a current self-contained yt-dlp binary in the writable MusicDrop
-/// folder. The packaged yt-dlp is usually years old and fails on YouTube.
+/// Keeps a current pure-Python yt-dlp zipapp in the writable MusicDrop
+/// folder. A Mach-O/PyInstaller binary is killed by iOS; the zipapp runs
+/// under the installed python3 instead.
 static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 	NSFileManager *manager = [NSFileManager defaultManager];
 	NSError *directoryError = nil;
@@ -242,10 +214,17 @@ static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 
 	NSDictionary *attributes = [manager attributesOfItemAtPath:MDYouTubeBinaryPath error:nil];
 	NSDate *modified = attributes[NSFileModificationDate];
-	BOOL fresh = [manager isExecutableFileAtPath:MDYouTubeBinaryPath] &&
-				 modified && modified.timeIntervalSinceNow > -(7 * 24 * 60 * 60);
+	BOOL isZipapp = NO;
+	NSFileHandle *cached = [NSFileHandle fileHandleForReadingAtPath:MDYouTubeBinaryPath];
+	if (cached) {
+		NSData *header = [cached readDataUpToLength:24];
+		[cached closeFile];
+		NSString *prefix = [[NSString alloc] initWithData:header encoding:NSUTF8StringEncoding];
+		isZipapp = [prefix hasPrefix:@"#!/usr/bin/env python"];
+	}
+	BOOL fresh = isZipapp && modified && modified.timeIntervalSinceNow > -(7 * 24 * 60 * 60);
 	if (fresh) {
-		MDLog(@"YouTube: using cached yt-dlp");
+		MDLog(@"YouTube: using cached yt-dlp zipapp");
 		return YES;
 	}
 
@@ -280,7 +259,7 @@ static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 
 	NSDictionary *downloadAttributes = [manager attributesOfItemAtPath:downloadedFile.path error:nil];
 	unsigned long long size = [downloadAttributes[NSFileSize] unsignedLongLongValue];
-	if (size < 5 * 1024 * 1024 || size > 100 * 1024 * 1024) {
+	if (size < 1 * 1024 * 1024 || size > 100 * 1024 * 1024) {
 		MDLog(@"YouTube: refusing suspicious yt-dlp download (%llu bytes).", size);
 		return NO;
 	}
@@ -292,16 +271,6 @@ static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 		return NO;
 	}
 	chmod(temporaryPath.UTF8String, 0755);
-
-	NSString *ldid = MDExecutableAtPaths(@[
-		@"/var/jb/usr/bin/ldid", @"/var/jb/bin/ldid", @"/usr/bin/ldid",
-	]);
-	if (ldid) {
-		NSInteger status = MDRunTool(@[ldid, @"-S", temporaryPath]);
-		MDLog(@"YouTube: ldid status %ld", (long)status);
-	} else {
-		MDLog(@"YouTube: ldid not found; attempting unsigned binary");
-	}
 
 	NSError *replaceError = nil;
 	BOOL replaced = [manager replaceItemAtURL:[NSURL fileURLWithPath:MDYouTubeBinaryPath]
@@ -321,8 +290,14 @@ static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 }
 
 static NSArray<NSString *> *MDYouTubeLauncher(MDDownloadProgressBlock progress) {
-	if (MDRefreshYouTubeBinary(progress)) {
-		return @[MDYouTubeBinaryPath];
+	NSString *python = MDExecutableAtPaths(@[
+		@"/var/jb/usr/bin/python3",
+		@"/var/jb/bin/python3",
+		@"/usr/bin/python3",
+		@"/usr/local/bin/python3",
+	]);
+	if (MDRefreshYouTubeBinary(progress) && python) {
+		return @[python, MDYouTubeBinaryPath];
 	}
 	NSString *installed = MDExecutableAtPaths(@[
 		@"/var/jb/usr/bin/yt-dlp",
@@ -580,6 +555,7 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 	NSMutableArray<NSString *> *arguments = [launcher mutableCopy];
 	[arguments addObjectsFromArray:@[
 		@"--no-playlist",
+		@"--extractor-args", @"youtube:player_client=android",
 		@"--max-filesize", @"500M",
 		@"--extract-audio",
 		@"--audio-format", @"m4a",
