@@ -54,7 +54,17 @@
 - [ ] Connect download progress, errors, and successful local output to `beginImport:`.
 - [ ] Verify all completion paths restore button state.
 
-### Task 3: Packaging and documentation
+### Task 3: UI refresh (2026-11-24)
+
+**Files:** Create `MDPreferences.h/.m`, `MDOverlayView.h/.m`; modify `MDImportButton.m`, `MDDownloadManager.h/.m`, `MDImporter.m`, `Makefile`, `control`, docs.
+
+- Replace `UIAlertController` action sheet with a custom bottom sheet: header + 5 rows (Import Files, Download URL, Search YouTube, Settings, Help).
+- Custom prompt card with text field and clipboard paste; custom progress HUD with progress bar; custom result sheet.
+- Settings: Embed Lyrics toggle, Embed Artwork toggle, Clear cached yt-dlp, Copy log path.
+- Search uses `ytsearch1:<query>` passed to the helper; respects the same validation/limits.
+- Verify: Actions build succeeds, repo publishes, existing import/download flows unchanged.
+
+### Task 4: Packaging and documentation
 
 **Files:**
 - Modify: `control`

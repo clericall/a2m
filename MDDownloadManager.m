@@ -2,6 +2,7 @@
 #import "MDHelperClient.h"
 #import "MDHelperProtocol.h"
 #import "MDLog.h"
+#import "MDPreferences.h"
 
 #import <arpa/inet.h>
 #import <errno.h>
@@ -412,6 +413,35 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 	[self downloadDirectURL:url progress:progress completion:completion];
 }
 
+- (void)searchYouTube:(NSString *)query
+			 progress:(MDDownloadProgressBlock)progress
+		   completion:(MDDownloadCompletionBlock)completion {
+	NSString *trimmed = [query stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (trimmed.length == 0) {
+		MDFinishDownload(completion, nil, MDDownloadError(50, @"Enter a song or artist name."));
+		return;
+	}
+	if (trimmed.length > 200) {
+		trimmed = [trimmed substringToIndex:200];
+	}
+	MDReportProgress(progress, @"Searching YouTube…");
+	[MDHelperClient runOperation:@{
+		MDHelperOperationKey: MDHelperOperationYouTube,
+		MDHelperQueryKey: trimmed,
+	} progress:^(NSString *status) {
+		MDReportProgress(progress, status);
+	} completion:^(NSDictionary *response, NSError *helperError) {
+		if (helperError) {
+			MDFinishDownload(completion, nil, helperError);
+			return;
+		}
+		NSString *path = response[MDHelperResultPathKey];
+		MDFinishDownload(completion,
+						 path.length > 0 ? [NSURL fileURLWithPath:path] : nil,
+						 path.length > 0 ? nil : MDDownloadError(51, @"No matching video was found."));
+	}];
+}
+
 - (void)downloadDirectURL:(NSURL *)url
 				  progress:(MDDownloadProgressBlock)progress
 				completion:(MDDownloadCompletionBlock)completion {
@@ -524,9 +554,9 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 }
 
 /// Runs in the helper daemon, which is not sandboxed and can spawn yt-dlp.
-+ (void)performYouTubeDownload:(NSURL *)url
-					  progress:(MDDownloadProgressBlock)progress
-					completion:(MDDownloadCompletionBlock)completion {
++ (void)performYouTubeDownloadTarget:(NSString *)target
+							progress:(MDDownloadProgressBlock)progress
+						  completion:(MDDownloadCompletionBlock)completion {
 	NSError *directoryError = nil;
 	if (!MDEnsureDownloadDirectories(&directoryError)) {
 		MDFinishDownload(completion, nil, directoryError);
@@ -553,6 +583,13 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 		return;
 	}
 
+	NSString *format = [MDPreferences downloadFormat];
+	if (![@[@"m4a", @"mp3", @"flac"] containsObject:format]) {
+		format = @"m4a";
+	}
+	BOOL embedExtras = [MDPreferences embedArtwork];
+	BOOL detailed = [MDPreferences showProgressDetails];
+
 	NSString *outputTemplate = [MDDownloadRoot stringByAppendingPathComponent:@"%(title).100B-%(id)s.%(ext)s"];
 	NSMutableArray<NSString *> *arguments = [launcher mutableCopy];
 	[arguments addObjectsFromArray:@[
@@ -560,18 +597,28 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 		@"--extractor-args", @"youtube:player_client=android",
 		@"--max-filesize", @"500M",
 		@"--extract-audio",
-		@"--audio-format", @"m4a",
+		@"--audio-format", format,
 		@"--audio-quality", @"0",
-		@"--embed-metadata",
-		@"--embed-thumbnail",
-		@"--convert-thumbnails", @"jpg",
+	]];
+	if (embedExtras) {
+		[arguments addObjectsFromArray:@[
+			@"--embed-metadata",
+			@"--embed-thumbnail",
+			@"--convert-thumbnails", @"jpg",
+		]];
+	}
+	[arguments addObjectsFromArray:@[
 		@"--ffmpeg-location", ffmpeg,
 		@"--newline",
-		@"--progress",
+	]];
+	if (detailed) {
+		[arguments addObject:@"--progress"];
+	}
+	[arguments addObjectsFromArray:@[
 		@"--print", @"after_move:MD_FILE:%(filepath)s",
 		@"--output", outputTemplate,
 		@"--",
-		url.absoluteString,
+		target,
 	]];
 
 	NSMutableDictionary<NSString *, NSString *> *environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
@@ -624,7 +671,7 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 		return;
 	}
 
-	MDLog(@"Started yt-dlp pid %d for %@", process, url.host);
+	MDLog(@"Started yt-dlp pid %d for %@", process, target);
 	NSMutableString *outputTail = [NSMutableString string];
 	__block NSString *downloadedPath = nil;
 	FILE *stream = fdopen(outputPipe[0], "r");

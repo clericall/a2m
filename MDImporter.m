@@ -1,8 +1,9 @@
 #import "MDImporter.h"
 #import "MDHelperClient.h"
 #import "MDHelperProtocol.h"
-#import "MDServer.h"
 #import "MDLog.h"
+#import "MDPreferences.h"
+#import "MDServer.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
@@ -638,17 +639,19 @@ static NSData *MDDefaultArtwork(void) {
 
 	// Lyrics are embedded by the unsandboxed helper (FFmpeg cannot be spawned
 	// from inside Music). Failure is non-fatal; the file imports without lyrics.
-	NSError *lyricsError = nil;
-	[MDHelperClient runOperation:@{
-		MDHelperOperationKey: MDHelperOperationLyrics,
-		MDHelperPathKey: destination,
-		MDHelperTitleKey: title,
-		MDHelperArtistKey: artist,
-		MDHelperAlbumKey: album,
-		MDHelperDurationKey: metadata[@"duration"] ?: @0,
-	} progress:nil error:&lyricsError];
-	if (lyricsError) {
-		MDLog(@"Lyrics: helper failed for '%@': %@", title, lyricsError.localizedDescription);
+	if ([MDPreferences embedLyrics]) {
+		NSError *lyricsError = nil;
+		[MDHelperClient runOperation:@{
+			MDHelperOperationKey: MDHelperOperationLyrics,
+			MDHelperPathKey: destination,
+			MDHelperTitleKey: title,
+			MDHelperArtistKey: artist,
+			MDHelperAlbumKey: album,
+			MDHelperDurationKey: metadata[@"duration"] ?: @0,
+		} progress:nil error:&lyricsError];
+		if (lyricsError) {
+			MDLog(@"Lyrics: helper failed for '%@': %@", title, lyricsError.localizedDescription);
+		}
 	}
 
 	return @{

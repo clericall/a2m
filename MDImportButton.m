@@ -2,6 +2,7 @@
 #import "MDDownloadManager.h"
 #import "MDImporter.h"
 #import "MDLog.h"
+#import "MDUI.h"
 
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <QuartzCore/QuartzCore.h>
@@ -87,86 +88,10 @@ static UIViewController *MDTopViewController(void) {
 	return controller;
 }
 
-@interface MDProgressHUD : UIView
-- (void)showInWindow:(UIWindow *)window text:(NSString *)text;
-- (void)updateText:(NSString *)text;
-- (void)hide;
-@end
-
-@implementation MDProgressHUD {
-	UIVisualEffectView *_blurView;
-	UIActivityIndicatorView *_spinner;
-	UILabel *_label;
-}
-
-- (instancetype)initWithFrame:(CGRect)frame {
-	(void)frame;
-	self = [super initWithFrame:CGRectMake(0, 0, 210, 120)];
-	if (self) {
-		self.backgroundColor = [UIColor clearColor];
-		self.userInteractionEnabled = NO;
-
-		UIBlurEffect *effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
-		_blurView = [[UIVisualEffectView alloc] initWithEffect:effect];
-		_blurView.frame = self.bounds;
-		_blurView.layer.cornerRadius = 20;
-		_blurView.layer.cornerCurve = kCACornerCurveContinuous;
-		_blurView.clipsToBounds = YES;
-		[self addSubview:_blurView];
-
-		_spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
-		_spinner.color = [UIColor whiteColor];
-		_spinner.center = CGPointMake(CGRectGetMidX(self.bounds), 44);
-		[self addSubview:_spinner];
-
-		_label = [[UILabel alloc] initWithFrame:CGRectMake(12, 76, self.bounds.size.width - 24, 32)];
-		_label.textColor = [UIColor whiteColor];
-		_label.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
-		_label.textAlignment = NSTextAlignmentCenter;
-		_label.numberOfLines = 2;
-		[self addSubview:_label];
-	}
-	return self;
-}
-
-- (void)showInWindow:(UIWindow *)window text:(NSString *)text {
-	if (!window) {
-		return;
-	}
-	_label.text = text;
-	if (self.superview != window) {
-		[self removeFromSuperview];
-		[window addSubview:self];
-	}
-	[window bringSubviewToFront:self];
-	self.center = CGPointMake(CGRectGetMidX(window.bounds), CGRectGetMidY(window.bounds));
-	[_spinner startAnimating];
-	if (self.alpha < 1.0) {
-		self.alpha = 0.0;
-		[UIView animateWithDuration:0.2 animations:^{
-			self.alpha = 1.0;
-		}];
-	}
-}
-
-- (void)updateText:(NSString *)text {
-	_label.text = text;
-}
-
-- (void)hide {
-	[UIView animateWithDuration:0.2 animations:^{
-		self.alpha = 0.0;
-	} completion:^(BOOL finished) {
-		[self->_spinner stopAnimating];
-		[self removeFromSuperview];
-	}];
-}
-
-@end
-
 @interface MDImportButton () <UIDocumentPickerDelegate>
 @property (nonatomic, strong, nullable) UIDocumentPickerViewController *picker;
-@property (nonatomic, strong) MDProgressHUD *hud;
+@property (nonatomic, strong, nullable) UIView *progressView;
+@property (nonatomic, strong) NSString *progressTitle;
 @property (nonatomic, assign) BOOL importing;
 @property (nonatomic, assign) BOOL downloading;
 @property (nonatomic, assign) BOOL positionRestored;
@@ -265,8 +190,6 @@ static UIViewController *MDTopViewController(void) {
 
 		UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(buttonPanned:)];
 		[self addGestureRecognizer:pan];
-
-		_hud = [[MDProgressHUD alloc] initWithFrame:CGRectZero];
 	}
 	return self;
 }
@@ -350,40 +273,36 @@ static UIViewController *MDTopViewController(void) {
 		return;
 	}
 
-	UIViewController *presenter = MDTopViewController();
-	if (!presenter) {
-		MDLog(@"No view controller available to present the source menu.");
+	UIWindow *window = MDKeyWindow();
+	if (!window) {
+		MDLog(@"No window available to show the menu.");
 		return;
 	}
 
-	UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"Add Music"
-														 message:nil
-												  preferredStyle:UIAlertControllerStyleActionSheet];
 	__weak MDImportButton *weakSelf = self;
-	[menu addAction:[UIAlertAction actionWithTitle:@"Import Files"
-										 style:UIAlertActionStyleDefault
-									   handler:^(__unused UIAlertAction *action) {
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[weakSelf showDocumentPicker];
-		});
-	}]];
-	[menu addAction:[UIAlertAction actionWithTitle:@"Download URL"
-										 style:UIAlertActionStyleDefault
-									   handler:^(__unused UIAlertAction *action) {
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[weakSelf showDownloadPrompt];
-		});
-	}]];
-	[menu addAction:[UIAlertAction actionWithTitle:@"Cancel"
-										 style:UIAlertActionStyleCancel
-									   handler:nil]];
-
-	UIPopoverPresentationController *popover = menu.popoverPresentationController;
-	if (popover) {
-		popover.sourceView = self;
-		popover.sourceRect = self.bounds;
-	}
-	[presenter presentViewController:menu animated:YES completion:nil];
+	[MDUI showMenuInWindow:window selection:^(MDMenuAction action) {
+		MDImportButton *strongSelf = weakSelf;
+		if (!strongSelf) {
+			return;
+		}
+		switch (action) {
+			case MDMenuActionImportFiles:
+				[strongSelf showDocumentPicker];
+				break;
+			case MDMenuActionDownloadURL:
+				[strongSelf showDownloadPrompt];
+				break;
+			case MDMenuActionSearch:
+				[strongSelf showSearchPrompt];
+				break;
+			case MDMenuActionSettings:
+				[MDUI showSettingsInWindow:MDKeyWindow()];
+				break;
+			case MDMenuActionHelp:
+				[MDUI showHelpInWindow:MDKeyWindow()];
+				break;
+		}
+	}];
 }
 
 - (void)showDocumentPicker {
@@ -410,7 +329,7 @@ static UIViewController *MDTopViewController(void) {
 	}
 
 	if (types.count == 0) {
-		[self showMessage:@"This iOS version did not report any audio file types."];
+		[self showResultWithTitle:@"Unsupported" message:@"This iOS version did not report any audio file types." success:NO];
 		return;
 	}
 
@@ -434,38 +353,42 @@ static UIViewController *MDTopViewController(void) {
 	if (self.importing || self.downloading) {
 		return;
 	}
-
-	UIViewController *presenter = MDTopViewController();
-	if (!presenter) {
-		MDLog(@"No view controller available to present the URL prompt.");
+	UIWindow *window = MDKeyWindow();
+	if (!window) {
 		return;
 	}
 
-	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Download Music"
-		message:@"Paste a direct audio or YouTube HTTPS URL. Only download media you own or have permission to save. Spotify full tracks are not available for download."
-		preferredStyle:UIAlertControllerStyleAlert];
-	[alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-		textField.placeholder = @"https://…";
-		textField.keyboardType = UIKeyboardTypeURL;
-		textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-		textField.autocorrectionType = UITextAutocorrectionTypeNo;
-		textField.clearButtonMode = UITextFieldViewModeWhileEditing;
-	}];
-
-	[alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
-										  style:UIAlertActionStyleCancel
-										handler:nil]];
-	__weak UIAlertController *weakAlert = alert;
 	__weak MDImportButton *weakSelf = self;
-	[alert addAction:[UIAlertAction actionWithTitle:@"Download"
-										  style:UIAlertActionStyleDefault
-										handler:^(__unused UIAlertAction *action) {
-		NSString *input = weakAlert.textFields.firstObject.text ?: @"";
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[weakSelf beginDownloadURLString:input];
-		});
-	}]];
-	[presenter presentViewController:alert animated:YES completion:nil];
+	[MDUI showInputInWindow:window
+		title:@"Download Music"
+		subtitle:@"Paste a direct audio or YouTube HTTPS URL. Only save media you have the right to download."
+		placeholder:@"https://…"
+		submit:@"Download"
+		initial:[UIPasteboard generalPasteboard].string ?: @""
+		completion:^(NSString *text) {
+		[weakSelf beginDownloadURLString:text];
+	}];
+}
+
+- (void)showSearchPrompt {
+	if (self.importing || self.downloading) {
+		return;
+	}
+	UIWindow *window = MDKeyWindow();
+	if (!window) {
+		return;
+	}
+
+	__weak MDImportButton *weakSelf = self;
+	[MDUI showInputInWindow:window
+		title:@"Search YouTube"
+		subtitle:@"Enter a song or artist name. MusicDrop downloads the first matching video as audio."
+		placeholder:@"Artist – Song"
+		submit:@"Search"
+		initial:@""
+		completion:^(NSString *text) {
+		[weakSelf beginSearch:text];
+	}];
 }
 
 - (void)beginDownloadURLString:(NSString *)input {
@@ -475,7 +398,7 @@ static UIViewController *MDTopViewController(void) {
 
 	NSString *value = [input stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (value.length == 0) {
-		[self showMessage:@"Enter a direct audio or YouTube HTTPS URL."];
+		[self showResultWithTitle:@"No URL" message:@"Enter a direct audio or YouTube HTTPS URL." success:NO];
 		return;
 	}
 	if ([value rangeOfString:@"://"].location == NSNotFound) {
@@ -483,35 +406,83 @@ static UIViewController *MDTopViewController(void) {
 	}
 	NSURL *url = [NSURL URLWithString:value];
 	if (!url) {
-		[self showMessage:@"That URL is not valid."];
+		[self showResultWithTitle:@"Invalid URL" message:@"That URL is not valid." success:NO];
 		return;
 	}
 
+	__weak MDImportButton *weakSelf = self;
+	[self startOperation:^{
+		[[MDDownloadManager sharedManager] downloadURL:url
+			progress:^(NSString *status) {
+				[weakSelf updateProgressWithStatus:status];
+			}
+			completion:^(NSURL *localFileURL, NSError *error) {
+				[weakSelf finishOperationWithFileURL:localFileURL error:error];
+			}];
+	}];
+}
+
+- (void)beginSearch:(NSString *)input {
+	if (self.importing || self.downloading) {
+		return;
+	}
+
+	NSString *value = [input stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (value.length == 0) {
+		[self showResultWithTitle:@"No Query" message:@"Enter a song or artist name to search." success:NO];
+		return;
+	}
+
+	__weak MDImportButton *weakSelf = self;
+	[self startOperation:^{
+		[[MDDownloadManager sharedManager] searchYouTube:value
+			progress:^(NSString *status) {
+				[weakSelf updateProgressWithStatus:status];
+			}
+			completion:^(NSURL *localFileURL, NSError *error) {
+				[weakSelf finishOperationWithFileURL:localFileURL error:error];
+			}];
+	}];
+}
+
+- (void)startOperation:(void (^)(void))operation {
 	self.downloading = YES;
 	self.enabled = NO;
 	self.alpha = 0.55;
-	[self.hud showInWindow:MDKeyWindow() text:@"Checking URL…"];
+	self.progressTitle = @"Downloading…";
+	self.progressView = [MDUI showProgressInWindow:MDKeyWindow() title:@"Downloading…"];
+	operation();
+}
 
-	__weak MDImportButton *weakSelf = self;
-	[[MDDownloadManager sharedManager] downloadURL:url
-									 progress:^(NSString *status) {
-		[weakSelf.hud updateText:status];
-	} completion:^(NSURL *localFileURL, NSError *error) {
-		MDImportButton *strongSelf = weakSelf;
-		if (!strongSelf) {
-			return;
-		}
+- (void)updateProgressWithStatus:(NSString *)status {
+	NSString *detail = status ?: @"Working…";
+	CGFloat percentage = 0.0;
+	NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"([0-9]+(?:\\.[0-9]+)?)%"
+																	 options:0
+																	   error:nil];
+	NSTextCheckingResult *match = [regex firstMatchInString:detail
+													options:0
+													  range:NSMakeRange(0, detail.length)];
+	if (match.numberOfRanges > 1) {
+		percentage = [[detail substringWithRange:[match rangeAtIndex:1]] doubleValue] / 100.0;
+	}
+	[MDUI updateProgress:self.progressView title:self.progressTitle detail:detail percentage:percentage];
+}
 
-		strongSelf.downloading = NO;
-		strongSelf.enabled = YES;
-		strongSelf.alpha = 1.0;
-		if (localFileURL && !error) {
-			[strongSelf beginImport:@[localFileURL]];
-		} else {
-			[strongSelf.hud hide];
-			[strongSelf showMessage:error.localizedDescription ?: @"The download failed."];
-		}
-	}];
+- (void)finishOperationWithFileURL:(NSURL *)localFileURL error:(NSError *)error {
+	self.downloading = NO;
+	self.enabled = YES;
+	self.alpha = 1.0;
+	[MDUI hideProgress:self.progressView];
+	self.progressView = nil;
+
+	if (localFileURL && !error) {
+		[self beginImport:@[localFileURL]];
+	} else {
+		[self showResultWithTitle:@"Download Failed"
+						  message:error.localizedDescription ?: @"The download failed."
+						  success:NO];
+	}
 }
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller
@@ -538,79 +509,59 @@ static UIViewController *MDTopViewController(void) {
 	self.importing = YES;
 	self.enabled = NO;
 	self.alpha = 0.55;
-
-	UIWindow *window = MDKeyWindow();
-	[self.hud showInWindow:window text:@"Preparing import…"];
+	self.progressTitle = @"Importing…";
+	self.progressView = [MDUI showProgressInWindow:MDKeyWindow() title:@"Importing…"];
 
 	__weak MDImportButton *weakSelf = self;
 	[[MDImporter sharedImporter] importURLs:urls
-								   progress:^(NSString *status) {
-		[weakSelf.hud updateText:status];
-	} completion:^(NSUInteger imported, NSArray<NSString *> *errors) {
+		progress:^(NSString *status) {
+			[weakSelf updateProgressWithStatus:status];
+		} completion:^(NSUInteger imported, NSArray<NSString *> *errors) {
 		MDImportButton *strongSelf = weakSelf;
 		if (!strongSelf) {
 			return;
 		}
-		[strongSelf.hud hide];
+		[MDUI hideProgress:strongSelf.progressView];
+		strongSelf.progressView = nil;
 		strongSelf.importing = NO;
 		strongSelf.enabled = YES;
 		strongSelf.alpha = 1.0;
 		[MDImportButton installIfNeeded];
-		[strongSelf showResultWithImported:imported errors:errors];
+		[strongSelf showImportResultWithImported:imported errors:errors];
 	}];
 }
 
-- (void)showResultWithImported:(NSUInteger)imported errors:(NSArray<NSString *> *)errors {
+- (void)showImportResultWithImported:(NSUInteger)imported errors:(NSArray<NSString *> *)errors {
 	NSString *message = nil;
+	BOOL success = imported > 0;
 
 	if (imported > 0) {
 		NSString *items = imported == 1 ? @"item" : @"items";
-		message = [NSString stringWithFormat:@"Queued %lu %@ in Music.\n\nKeep Music open while the download finishes.",
+		message = [NSString stringWithFormat:@"Queued %lu %@ in Music.\n\nKeep Music open while the import finishes.",
 				   (unsigned long)imported, items];
 		if (errors.count > 0) {
-			NSArray<NSString *> *shown = errors;
-			NSString *extra = @"";
-			if (shown.count > 5) {
-				extra = [NSString stringWithFormat:@"\n• …and %lu more",
-						 (unsigned long)(shown.count - 5)];
-				shown = [shown subarrayWithRange:NSMakeRange(0, 5)];
-			}
-			message = [message stringByAppendingFormat:@"\n\n%lu file%@ could not be imported:\n• %@%@",
+			message = [message stringByAppendingFormat:@"\n\n%lu file%@ could not be imported:\n• %@",
 					   (unsigned long)errors.count, errors.count == 1 ? @"" : @"s",
-					   [shown componentsJoinedByString:@"\n• "], extra];
+					   [[errors subarrayWithRange:NSMakeRange(0, MIN((NSUInteger)5, errors.count))] componentsJoinedByString:@"\n• "]];
 		}
 	} else {
-		NSString *details = @"No files were selected.";
-		if (errors.count > 0) {
-			NSArray<NSString *> *shown = errors;
-			NSString *extra = @"";
-			if (shown.count > 5) {
-				extra = [NSString stringWithFormat:@"\n\n• …and %lu more",
-						 (unsigned long)(shown.count - 5)];
-				shown = [shown subarrayWithRange:NSMakeRange(0, 5)];
-			}
-			details = [NSString stringWithFormat:@"• %@%@",
-					   [shown componentsJoinedByString:@"\n\n• "], extra];
-		}
-		message = [NSString stringWithFormat:@"Nothing was imported.\n\n%@\n\nLog: %@",
-				   details, MDLogPath];
+		message = errors.count > 0
+			? [NSString stringWithFormat:@"• %@", [errors componentsJoinedByString:@"\n• "]]
+			: @"No files were selected.";
 	}
 
-	[self showMessage:message];
+	[self showResultWithTitle:success ? @"Added to Music" : @"Nothing Imported"
+					  message:message
+					  success:success];
 }
 
-- (void)showMessage:(NSString *)message {
-	UIViewController *presenter = MDTopViewController();
-	if (!presenter) {
-		MDLog(@"Cannot show message, no presenter: %@", message);
+- (void)showResultWithTitle:(NSString *)title message:(NSString *)message success:(BOOL)success {
+	UIWindow *window = MDKeyWindow();
+	if (!window) {
+		MDLog(@"Cannot show result, no window: %@", title);
 		return;
 	}
-
-	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"MusicDrop"
-																   message:message
-															preferredStyle:UIAlertControllerStyleAlert];
-	[alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-	[presenter presentViewController:alert animated:YES completion:nil];
+	[MDUI showResultInWindow:window title:title message:message success:success handler:nil];
 }
 
 @end

@@ -7,6 +7,7 @@
 #define MDHelperOperationYouTube @"youtube"
 #define MDHelperOperationLyrics @"lyrics"
 #define MDHelperURLKey @"url"
+#define MDHelperQueryKey @"query"
 #define MDHelperPathKey @"path"
 #define MDHelperTitleKey @"title"
 #define MDHelperArtistKey @"artist"

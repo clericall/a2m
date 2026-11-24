@@ -16,10 +16,16 @@ typedef void (^MDDownloadCompletionBlock)(NSURL * _Nullable localFileURL,
 		   progress:(nullable MDDownloadProgressBlock)progress
 		 completion:(MDDownloadCompletionBlock)completion;
 
-/// Called only by the unsandboxed MusicDrop helper daemon.
-+ (void)performYouTubeDownload:(NSURL *)url
-					  progress:(nullable MDDownloadProgressBlock)progress
-					completion:(MDDownloadCompletionBlock)completion;
+/// Downloads one YouTube URL or a `ytsearch1:` query. Called only by the
+/// unsandboxed MusicDrop helper daemon.
++ (void)performYouTubeDownloadTarget:(NSString *)target
+							progress:(nullable MDDownloadProgressBlock)progress
+						  completion:(MDDownloadCompletionBlock)completion;
+
+/// Downloads the first YouTube result for a search query.
+- (void)searchYouTube:(NSString *)query
+			 progress:(nullable MDDownloadProgressBlock)progress
+		   completion:(MDDownloadCompletionBlock)completion;
 
 @end
 

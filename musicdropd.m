@@ -96,14 +96,24 @@ static void MDHelperHandleClient(int fd) {
 
 		NSString *operation = request[MDHelperOperationKey];
 		if ([operation isEqualToString:MDHelperOperationYouTube]) {
-			NSURL *url = [NSURL URLWithString:request[MDHelperURLKey]];
-			if (!url) {
-				MDHelperSendError(fd, @"The helper received an invalid URL.");
+			NSString *urlString = request[MDHelperURLKey];
+			NSString *query = request[MDHelperQueryKey];
+			NSString *target = nil;
+			NSString *display = nil;
+			if (query.length > 0) {
+				target = [NSString stringWithFormat:@"ytsearch1:%@", query];
+				display = query;
+			} else if (urlString.length > 0) {
+				target = urlString;
+				display = [NSURL URLWithString:urlString].host ?: urlString;
+			}
+			if (target.length == 0) {
+				MDHelperSendError(fd, @"The helper received an invalid request.");
 				close(fd);
 				return;
 			}
-			MDLog(@"Helper: YouTube request for %@", url.host);
-			[MDDownloadManager performYouTubeDownload:url
+			MDLog(@"Helper: YouTube request for %@", display);
+			[MDDownloadManager performYouTubeDownloadTarget:target
 				progress:^(NSString *status) {
 					MDHelperWriteLine(fd, MDHelperEncode(@"P", status));
 				}
