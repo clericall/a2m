@@ -7,16 +7,16 @@ Architectures: iphoneos-arm64
 Components: main
 Description: MusicDrop - import your own audio files directly into the Music app.
 Icon: CydiaIcon.png
-Date: Tue, 24 Nov 2026 15:14:28 +0000
+Date: Tue, 24 Nov 2026 15:27:02 +0000
 Homepage: https://clericall.github.io/a2m/
 
 MD5Sum:
- 31df8930f16f3c9674f53e79655c6e90 788 Packages
- fd18148de43000a04ae9c1c4536f33e8 530 Packages.gz
- bff91b8df7c50faab21781e49c6b2b89 589 Packages.bz2
- db268ab5a19c06d2b18749ba15c9fd90 608 Packages.xz
+ a8a167ba4c02f5e3403bb8f36d624e5c 788 Packages
+ 5fd2e308fb67b2adee580ab09cc42244 532 Packages.gz
+ f4f37c68eb40422fd7f195a4ac5b8cef 600 Packages.bz2
+ 3fc5b5fbae39028b9b7e2f96f14ca74e 612 Packages.xz
 SHA256:
- 6011684a6351361e61fd8706e6f22a6b536a46ddee37b440d39d5b4ba5d4cc4a 788 Packages
- b9a8efd1d827b31314a100631bc21830a7ff700b6a9c1c511f983d1d0e2836b5 530 Packages.gz
- 4d30882a233df69baeee58429b6dd9498c1042b8830822acf9923927b58f622e 589 Packages.bz2
- 8c946a954274be0e6979a2411ed451c67b8bbbd24fea2d5bff9e4a9bc995b573 608 Packages.xz
+ a3786ea1ad21400c708f28fc12d394ec54efb068cdc78b4458b09db4a9ec2510 788 Packages
+ 686d1d6a2c6ddfeb267748e195411ad4c6eb797b3ab061aa409171fe305fd92d 532 Packages.gz
+ fb6f7dccce4d145aa1a0fea681d83a718fc6fb609bd6a30b93c308091ac65120 600 Packages.bz2
+ a42fd1de9116a13e58a73e267facc619fcc920679eae148d68d6fb3501694fb3 612 Packages.xz
