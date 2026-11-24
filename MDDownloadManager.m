@@ -8,6 +8,8 @@
 #import <fcntl.h>
 #import <netinet/in.h>
 #import <spawn.h>
+#import <stdio.h>
+#import <string.h>
 #import <sys/stat.h>
 #import <sys/wait.h>
 #import <unistd.h>
@@ -215,12 +217,12 @@ static BOOL MDRefreshYouTubeBinary(MDDownloadProgressBlock progress) {
 	NSDictionary *attributes = [manager attributesOfItemAtPath:MDYouTubeBinaryPath error:nil];
 	NSDate *modified = attributes[NSFileModificationDate];
 	BOOL isZipapp = NO;
-	NSFileHandle *cached = [NSFileHandle fileHandleForReadingAtPath:MDYouTubeBinaryPath];
+	FILE *cached = fopen(MDYouTubeBinaryPath.UTF8String, "rb");
 	if (cached) {
-		NSData *header = [cached readDataUpToLength:24];
-		[cached closeFile];
-		NSString *prefix = [[NSString alloc] initWithData:header encoding:NSUTF8StringEncoding];
-		isZipapp = [prefix hasPrefix:@"#!/usr/bin/env python"];
+		char header[32] = {0};
+		size_t count = fread(header, 1, sizeof(header) - 1, cached);
+		fclose(cached);
+		isZipapp = count >= 21 && strncmp(header, "#!/usr/bin/env python", 21) == 0;
 	}
 	BOOL fresh = isZipapp && modified && modified.timeIntervalSinceNow > -(7 * 24 * 60 * 60);
 	if (fresh) {
