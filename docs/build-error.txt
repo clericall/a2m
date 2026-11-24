@@ -1,0 +1,24 @@
+RUN 45412146383 8e406905c66e9a0f991d49d591838d4e072b616a
+[0;36m==> [1;39mCleaning…[m
+[0;36m==> [1;36mNotice:[m Build may be slow as Theos isn’t using all available CPU cores on this computer. Consider upgrading GNU Make: https://theos.dev/docs/parallel-building
+[1;31m> [1;3;39mMaking all for tweak MusicDrop…[m
+[0;31m==> [1;39mPreprocessing MusicDrop.xm…[m
+[0;32m==> [1;39mCompiling MusicDrop.xm (arm64)…[m
+[0;32m==> [1;39mCompiling MDImportButton.m (arm64)…[m
+[1mMDImportButton.m:564:86: [0m[0;1;31merror: [0m[1mnull passed to a callee that requires a non-null argument [-Werror,-Wnonnull][0m
+  564 |         [MDUI showResultInWindow:window title:title message:message success:success handler:nil];[0m
+      | [0;1;32m                                                                                            ^~~
+[0m[1m/Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk/usr/include/MacTypes.h:96:19: [0m[0;1;36mnote: [0mexpanded from macro 'nil'[0m
+   96 |       #define nil __DARWIN_NULL[0m
+      | [0;1;32m                  ^~~~~~~~~~~~~
+[0m[1m/Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk/usr/include/sys/_types.h:52:23: [0m[0;1;36mnote: [0mexpanded from macro '__DARWIN_NULL'[0m
+   52 | #define __DARWIN_NULL NULL[0m
+      | [0;1;32m                      ^~~~
+[0m[1m/Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/swift/clang/include/__stddef_null.h:26:14: [0m[0;1;36mnote: [0mexpanded from macro 'NULL'[0m
+   26 | #define NULL ((void*)0)[0m
+      | [0;1;32m             ^~~~~~~~~~
+[0m1 error generated.
+make[3]: *** [/Users/runner/work/a2m/a2m/.theos/obj/arm64/MDImportButton.m.a792a764.o] Error 1
+make[2]: *** [/Users/runner/work/a2m/a2m/.theos/obj/arm64/MusicDrop.dylib] Error 2
+make[1]: *** [internal-library-all_] Error 2
+make: *** [MusicDrop.all.tweak.variables] Error 2
