@@ -222,7 +222,7 @@ static NSInteger MDRunFFmpeg(NSArray<NSString *> *arguments) {
 
 	NSString *syncedLyrics = best[@"syncedLyrics"];
 	NSString *plainLyrics = best[@"plainLyrics"];
-	[self saveLyricsForTitle:title artist:artist result:best];
+	[MDLyrics saveLyricsForTitle:title artist:artist result:best];
 	NSString *lyrics = syncedLyrics.length > 0 ? syncedLyrics : plainLyrics;
 	if (![lyrics isKindOfClass:[NSString class]] || lyrics.length == 0) {
 		MDLog(@"Lyrics: no match for '%@' by '%@'", title, artist);
