@@ -78,6 +78,10 @@ static NSInteger MDRunFFmpeg(NSArray<NSString *> *arguments) {
 	return -1;
 }
 
+@interface MDLyrics ()
++ (void)saveLyricsForTitle:(NSString *)title artist:(NSString *)artist result:(NSDictionary *)result;
+@end
+
 @implementation MDLyrics
 
 + (instancetype)sharedLyrics {
