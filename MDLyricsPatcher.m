@@ -1,6 +1,7 @@
 #import "MDLyrics.h"
 #import "MDLog.h"
 
+#import <MediaPlayer/MediaPlayer.h>
 #import <objc/message.h>
 #import <substrate.h>
 
@@ -23,16 +24,32 @@ static NSString *MDStringFromItem(id item, NSArray<NSString *> *selectors) {
 }
 
 static id MDPatchedLyricsItem(id item) {
-	NSString *title = MDStringFromItem(item, @[@"title", @"trackName", @"name"]);
+	NSDictionary *nowPlayingInfo = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
+	NSString *title = nowPlayingInfo[MPMediaItemPropertyTitle];
+	NSString *artist = nowPlayingInfo[MPMediaItemPropertyArtist];
+	if (![title isKindOfClass:[NSString class]] || title.length == 0) {
+		title = MDStringFromItem(item, @[@"title", @"trackName", @"name"]);
+	}
+	if (![artist isKindOfClass:[NSString class]] || artist.length == 0) {
+		artist = MDStringFromItem(item, @[@"trackArtistName", @"artistName", @"artist"]);
+	}
 	if (title.length == 0) {
 		return nil;
 	}
-	NSString *artist = MDStringFromItem(item, @[@"trackArtistName", @"artistName", @"artist"]) ?: @"";
+	if (artist.length == 0) {
+		artist = @"";
+	}
 
 	NSString *synced = [MDLyrics syncedLyricsForTitle:title artist:artist];
 	NSString *plain = [MDLyrics plainLyricsForTitle:title artist:artist];
 	NSString *text = synced.length > 0 ? synced : plain;
 	if (text.length == 0) {
+		static NSString *lastMissingKey = nil;
+		NSString *key = [NSString stringWithFormat:@"%@|%@", title, artist];
+		if (![key isEqualToString:lastMissingKey]) {
+			lastMissingKey = key;
+			MDLog(@"LyricsPatch: no saved lyrics for '%@' by '%@'", title, artist);
+		}
 		return nil;
 	}
 
