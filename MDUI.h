@@ -10,6 +10,7 @@ typedef NS_ENUM(NSInteger, MDMenuAction) {
 	MDMenuActionFixLyrics,
 	MDMenuActionSettings,
 	MDMenuActionHelp,
+	MDMenuActionLyricsDebug,
 };
 
 @interface MDUI : NSObject

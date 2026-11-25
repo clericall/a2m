@@ -4,6 +4,7 @@
 #import "MDImporter.h"
 #import "MDLibraryScanner.h"
 #import "MDLog.h"
+#import "MDRuntimeDump.h"
 #import "MDUI.h"
 
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -315,6 +316,12 @@ static UIViewController *MDTopViewController(void) {
 				break;
 			case MDMenuActionHelp:
 				[MDUI showHelpInWindow:MDKeyWindow()];
+				break;
+			case MDMenuActionLyricsDebug:
+				[MDRuntimeDump logLyricsRuntimeInfo];
+				[strongSelf showResultWithTitle:@"Dump Written"
+					message:[NSString stringWithFormat:@"Music's lyrics classes and views were written to %@", MDLogPath]
+					success:YES];
 				break;
 		}
 	}];
