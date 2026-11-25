@@ -8,6 +8,13 @@
 static id (*MDLyricsOriginal)(id, SEL) = NULL;
 static BOOL (*MDHasLyricsOriginal)(id, SEL) = NULL;
 
+// Emergency kill switch: if this file exists, the patch does nothing.
+static NSString *const MDLyricsPatchDisablePath = @"/var/mobile/Media/MusicDrop/disable_lyrics_patch";
+
+static BOOL MDPatchEnabled(void) {
+	return ![[NSFileManager defaultManager] fileExistsAtPath:MDLyricsPatchDisablePath];
+}
+
 static NSString *MDStringFromItem(id item, NSArray<NSString *> *selectors) {
 	for (NSString *name in selectors) {
 		SEL selector = NSSelectorFromString(name);
@@ -23,15 +30,11 @@ static NSString *MDStringFromItem(id item, NSArray<NSString *> *selectors) {
 	return nil;
 }
 
-// Disabled until the exact initWithLyrics:userProvided: signature is
-// confirmed from the device dump. Keeping it off stops the crash; the
-// original implementation handles the button state.
-static BOOL MDDeepPatchEnabled = NO;
-
 static id MDPatchedLyricsItem(id item) {
-	if (!MDDeepPatchEnabled) {
+	if (!MDPatchEnabled()) {
 		return nil;
 	}
+
 	NSDictionary *nowPlayingInfo = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
 	NSString *title = nowPlayingInfo[MPMediaItemPropertyTitle];
 	NSString *artist = nowPlayingInfo[MPMediaItemPropertyArtist];
@@ -48,16 +51,9 @@ static id MDPatchedLyricsItem(id item) {
 		artist = @"";
 	}
 
-	NSString *synced = [MDLyrics syncedLyricsForTitle:title artist:artist];
-	NSString *plain = [MDLyrics plainLyricsForTitle:title artist:artist];
-	NSString *text = synced.length > 0 ? synced : plain;
+	// Prefer plain lyrics. Raw LRC markup can break Music's renderer.
+	NSString *text = [MDLyrics plainLyricsForTitle:title artist:artist];
 	if (text.length == 0) {
-		static NSString *lastMissingKey = nil;
-		NSString *key = [NSString stringWithFormat:@"%@|%@", title, artist];
-		if (![key isEqualToString:lastMissingKey]) {
-			lastMissingKey = key;
-			MDLog(@"LyricsPatch: no saved lyrics for '%@' by '%@'", title, artist);
-		}
 		return nil;
 	}
 
@@ -66,33 +62,40 @@ static id MDPatchedLyricsItem(id item) {
 	dispatch_once(&once, ^{
 		cache = [NSMutableDictionary dictionary];
 	});
+
 	NSString *key = [NSString stringWithFormat:@"%@|%@", title, artist];
-	id cached = cache[key];
-	if (cached) {
-		return cached;
-	}
+	@synchronized (cache) {
+		id cached = cache[key];
+		if (cached) {
+			return cached;
+		}
 
-	Class lyricsClass = NSClassFromString(@"MPNowPlayingInfoLyricsItem");
-	if (!lyricsClass) {
-		return nil;
-	}
+		Class lyricsClass = NSClassFromString(@"MPNowPlayingInfoLyricsItem");
+		if (!lyricsClass) {
+			MDLog(@"LyricsPatch: MPNowPlayingInfoLyricsItem missing");
+			return nil;
+		}
 
-	id result = nil;
-	@try {
-		id (*call)(id, SEL, id, BOOL) = (id (*)(id, SEL, id, BOOL))objc_msgSend;
-		result = call([lyricsClass alloc],
-					  NSSelectorFromString(@"initWithLyrics:userProvided:"),
-					  text, YES);
-	} @catch (NSException *exception) {
-		MDLog(@"LyricsPatch: could not build lyrics item: %@", exception.reason);
-		return nil;
-	}
-	if (result) {
+		id result = nil;
+		@try {
+			// Confirmed signature: @28@0:8@16B24 -> (id, SEL, id, BOOL)
+			id (*call)(id, SEL, id, BOOL) = (id (*)(id, SEL, id, BOOL))objc_msgSend;
+			result = call([lyricsClass alloc],
+						  NSSelectorFromString(@"initWithLyrics:userProvided:"),
+						  text, YES);
+		} @catch (NSException *exception) {
+			MDLog(@"LyricsPatch: init exception: %@", exception.reason);
+			return nil;
+		}
+		if (!result) {
+			MDLog(@"LyricsPatch: init returned nil for '%@'", title);
+			return nil;
+		}
 		cache[key] = result;
-		MDLog(@"LyricsPatch: provided lyrics for '%@' by '%@' (%lu chars)",
+		MDLog(@"LyricsPatch: created lyrics item for '%@' by '%@' (%lu chars)",
 			  title, artist, (unsigned long)text.length);
+		return result;
 	}
-	return result;
 }
 
 static id MDHookedLyrics(id self, SEL selector) {
@@ -113,7 +116,6 @@ static BOOL MDHookedHasLyrics(id self, SEL selector) {
 static void MDInstallLyricsPatch(void) {
 	Class itemClass = NSClassFromString(@"MPNowPlayingContentItem");
 	if (!itemClass) {
-		MDLog(@"LyricsPatch: MPNowPlayingContentItem not loaded; will retry");
 		return;
 	}
 	if (MDLyricsOriginal) {
@@ -123,7 +125,7 @@ static void MDInstallLyricsPatch(void) {
 					(IMP)MDHookedLyrics, (IMP *)&MDLyricsOriginal);
 	MSHookMessageEx(itemClass, @selector(hasLyrics),
 					(IMP)MDHookedHasLyrics, (IMP *)&MDHasLyricsOriginal);
-	MDLog(@"LyricsPatch: hooked MPNowPlayingContentItem lyrics/hasLyrics");
+	MDLog(@"LyricsPatch: hooked MPNowPlayingContentItem (enabled=%d)", MDPatchEnabled());
 }
 
 __attribute__((constructor)) static void MDLyricsPatchConstructor(void) {
