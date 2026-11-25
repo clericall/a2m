@@ -78,20 +78,6 @@ jobs:
             --description "MusicDrop - import your own audio files directly into the Music app." \
             --homepage "$HOMEPAGE"
 
-      - name: Commit generated repo
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A docs
-          if git diff --cached --quiet; then
-            echo "Repository index already up to date."
-          else
-            git commit -m "Update MusicDrop repo index [skip ci]"
-            git push origin "HEAD:${GITHUB_REF_NAME}" || \
-              echo "::warning::Could not push the generated index; the Pages deploy still uses this build."
-          fi
-
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
@@ -112,3 +98,17 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4.0.5
+
+      - name: Commit generated repo
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs
+          if git diff --cached --quiet; then
+            echo "Repository index already up to date."
+          else
+            git commit -m "Update MusicDrop repo index [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}" || \
+              echo "::warning::Could not push the generated index; the Pages deploy still uses this build."
+          fi
