@@ -10,7 +10,9 @@ MusicDrop does not bypass DRM, extract Spotify audio, or upload user files anywh
 
 Direct HTTPS downloads work without extra packages. YouTube downloads require FFmpeg and Python 3 (both available from `https://apt.procurs.us/`). MusicDrop fetches its own yt-dlp zipapp automatically and runs it with `python3`, since iOS will not execute a standalone downloader binary. Use them only for media you are allowed to save.
 
-When FFmpeg is installed, MusicDrop looks up lyrics on [LRCLIB](https://lrclib.net) using the track's title, artist, album, and duration, then embeds them into the audio file so the Music app shows them under **Now Playing → Lyrics**. The audio is never uploaded; only those four metadata fields are sent. If FFmpeg is missing, the lookup fails, or LRCLIB has no match, the song imports normally without lyrics.
+When FFmpeg is installed, MusicDrop looks up lyrics on [LRCLIB](https://lrclib.net) using the track's title, artist, album, and duration. The result is embedded into the audio file and saved as a sidecar in `/var/mobile/Media/MusicDrop/lyrics/`. The audio is never uploaded; only those four metadata fields are sent.
+
+iOS 10 and later do not read embedded lyrics for local files — the native Lyrics view is fed by Apple Music's catalog. MusicDrop therefore hooks `MPNowPlayingContentItem`'s `lyrics` and `hasLyrics` methods and returns a user-provided `MPNowPlayingInfoLyricsItem` built from the saved sidecar. That makes Music's own Lyrics button show lyrics for local and downloaded songs. If FFmpeg is missing, no lookup happens. If LRCLIB has no match, the song imports normally without lyrics.
 
 iOS does not allow the Music app to launch external binaries. YouTube downloads and lyrics therefore run in a small rootless LaunchDaemon (`com.musiccc.musicdropd`) that ships inside the package. The tweak sends requests to it over `127.0.0.1:45454`. The daemon is started by the post-install script and at every boot.
 
@@ -236,7 +238,8 @@ MDHelperClient.h/.m          tweak-side client for the helper daemon
 MDLibraryScanner.h/.m        scans library folders and reads file tags
 MDHelperProtocol.h           shared request keys and port
 musicdropd.m                 rootless LaunchDaemon (yt-dlp / FFmpeg runner)
-MDLyrics.h/.m                LRCLIB lookup and embedding via FFmpeg
+MDLyrics.h/.m                LRCLIB lookup, embedding, sidecar storage
+MDLyricsPatcher.m            hooks MPNowPlayingContentItem to expose lyrics to Music
 MDImporter.h/.m              file copy, metadata, artwork, lyrics, import
 MDServer.h/.m                loopback HTTP file server
 MDLog.h/.m                   file and console logging

@@ -1,6 +1,7 @@
 #import "MDLyrics.h"
 #import "MDLog.h"
 
+#import <CommonCrypto/CommonDigest.h>
 #import <errno.h>
 #import <fcntl.h>
 #import <math.h>
@@ -11,6 +12,7 @@
 #import <unistd.h>
 
 static NSString *const MDLyricsEndpoint = @"https://lrclib.net/api/search";
+static NSString *const MDLyricsCacheRoot = @"/var/mobile/Media/MusicDrop/lyrics";
 static NSUInteger const MDLyricsMaximumCharacters = 20000;
 
 static BOOL MDCanEmbedLyrics(NSString *extension) {
@@ -85,6 +87,55 @@ static NSInteger MDRunFFmpeg(NSArray<NSString *> *arguments) {
 		lyrics = [[MDLyrics alloc] init];
 	});
 	return lyrics;
+}
+
++ (NSString *)lyricsKeyForTitle:(NSString *)title artist:(NSString *)artist {
+	NSString *base = [NSString stringWithFormat:@"%@|%@",
+		title.lowercaseString ?: @"", artist.lowercaseString ?: @""];
+	unsigned char digest[CC_MD5_DIGEST_LENGTH];
+	CC_MD5(base.UTF8String, (CC_LONG)[base lengthOfBytesUsingEncoding:NSUTF8StringEncoding], digest);
+	NSMutableString *key = [NSMutableString stringWithCapacity:CC_MD5_DIGEST_LENGTH * 2];
+	for (NSUInteger index = 0; index < CC_MD5_DIGEST_LENGTH; index++) {
+		[key appendFormat:@"%02x", digest[index]];
+	}
+	return key;
+}
+
++ (nullable NSString *)readSidecarWithExtension:(NSString *)extension title:(NSString *)title artist:(NSString *)artist {
+	NSString *path = [MDLyricsCacheRoot stringByAppendingPathComponent:
+		[NSString stringWithFormat:@"%@.%@", [self lyricsKeyForTitle:title artist:artist], extension]];
+	NSString *text = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
+	return text.length > 0 ? text : nil;
+}
+
++ (nullable NSString *)plainLyricsForTitle:(NSString *)title artist:(NSString *)artist {
+	return [self readSidecarWithExtension:@"plain" title:title artist:artist];
+}
+
++ (nullable NSString *)syncedLyricsForTitle:(NSString *)title artist:(NSString *)artist {
+	return [self readSidecarWithExtension:@"lrc" title:title artist:artist];
+}
+
++ (void)saveLyricsForTitle:(NSString *)title artist:(NSString *)artist result:(NSDictionary *)result {
+	NSFileManager *manager = [NSFileManager defaultManager];
+	if (![manager fileExistsAtPath:MDLyricsCacheRoot]) {
+		[manager createDirectoryAtPath:MDLyricsCacheRoot withIntermediateDirectories:YES
+							attributes:@{NSFileProtectionKey: NSFileProtectionNone} error:nil];
+	}
+	NSString *key = [self lyricsKeyForTitle:title artist:artist];
+	NSDictionary *files = @{
+		@"plain": result[@"plainLyrics"] ?: @"",
+		@"lrc": result[@"syncedLyrics"] ?: @"",
+	};
+	for (NSString *extension in files) {
+		NSString *text = files[extension];
+		if (text.length == 0) {
+			continue;
+		}
+		NSString *path = [MDLyricsCacheRoot stringByAppendingPathComponent:
+			[NSString stringWithFormat:@"%@.%@", key, extension]];
+		[text writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+	}
 }
 
 - (nullable NSString *)fetchLyricsForTitle:(NSString *)title
@@ -167,6 +218,7 @@ static NSInteger MDRunFFmpeg(NSArray<NSString *> *arguments) {
 
 	NSString *syncedLyrics = best[@"syncedLyrics"];
 	NSString *plainLyrics = best[@"plainLyrics"];
+	[self saveLyricsForTitle:title artist:artist result:best];
 	NSString *lyrics = syncedLyrics.length > 0 ? syncedLyrics : plainLyrics;
 	if (![lyrics isKindOfClass:[NSString class]] || lyrics.length == 0) {
 		MDLog(@"Lyrics: no match for '%@' by '%@'", title, artist);
