@@ -23,7 +23,15 @@ static NSString *MDStringFromItem(id item, NSArray<NSString *> *selectors) {
 	return nil;
 }
 
+// Disabled until the exact initWithLyrics:userProvided: signature is
+// confirmed from the device dump. Keeping it off stops the crash; the
+// original implementation handles the button state.
+static BOOL MDDeepPatchEnabled = NO;
+
 static id MDPatchedLyricsItem(id item) {
+	if (!MDDeepPatchEnabled) {
+		return nil;
+	}
 	NSDictionary *nowPlayingInfo = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
 	NSString *title = nowPlayingInfo[MPMediaItemPropertyTitle];
 	NSString *artist = nowPlayingInfo[MPMediaItemPropertyArtist];

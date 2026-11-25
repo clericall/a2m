@@ -33,6 +33,28 @@ static void MDDumpViews(UIView *view, NSInteger depth) {
 + (void)logLyricsRuntimeInfo {
 	MDLog(@"===== LYRICS RUNTIME DUMP START =====");
 
+	// Exact type encodings for the methods the deep patch relies on.
+	NSArray<NSArray *> *targets = @[
+		@[@"MPNowPlayingInfoLyricsItem", @"initWithLyrics:userProvided:"],
+		@[@"MPNowPlayingInfoLyricsItem", @"lyrics"],
+		@[@"MPNowPlayingContentItem", @"setLyrics:"],
+		@[@"MPNowPlayingContentItem", @"lyrics"],
+		@[@"MPNowPlayingContentItem", @"hasLyrics"],
+		@[@"MPNowPlayingContentItem", @"title"],
+		@[@"MCDMusicNowPlayingViewController", @"nowPlayingItem"],
+	];
+	for (NSArray *target in targets) {
+		Class cls = NSClassFromString(target[0]);
+		SEL selector = NSSelectorFromString(target[1]);
+		if (!cls || !selector) {
+			MDLog(@"TYPE %@ %@ -> class/selector missing", target[0], target[1]);
+			continue;
+		}
+		Method method = class_getInstanceMethod(cls, selector);
+		MDLog(@"TYPE %@ %@ -> %s", target[0], target[1],
+			  method ? method_getTypeEncoding(method) : "NO METHOD");
+	}
+
 	unsigned int classCount = 0;
 	Class *classes = objc_copyClassList(&classCount);
 	if (classes) {
