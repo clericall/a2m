@@ -1,6 +1,6 @@
 Package: com.musiccc.musicdrop
 Name: MusicDrop
-Version: 1.7.0
+Version: 1.8.0
 Architecture: iphoneos-arm64
 Description: Import your own audio files into the Music app, on-device.
  Pick MP3, M4A, WAV, AIFF, or FLAC files with the floating button,

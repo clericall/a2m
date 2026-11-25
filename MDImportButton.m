@@ -1,6 +1,8 @@
 #import "MDImportButton.h"
 #import "MDDownloadManager.h"
+#import "MDHelperClient.h"
 #import "MDImporter.h"
+#import "MDLibraryScanner.h"
 #import "MDLog.h"
 #import "MDUI.h"
 
@@ -92,11 +94,18 @@ static UIViewController *MDTopViewController(void) {
 @property (nonatomic, strong, nullable) UIDocumentPickerViewController *picker;
 @property (nonatomic, strong, nullable) UIView *progressView;
 @property (nonatomic, strong) NSString *progressTitle;
+@property (nonatomic, strong, nullable) NSArray<NSString *> *pendingErrors;
+@property (nonatomic, assign) NSInteger pickerMode; // 0 = import, 1 = fix lyrics
 @property (nonatomic, assign) BOOL importing;
 @property (nonatomic, assign) BOOL downloading;
 @property (nonatomic, assign) BOOL positionRestored;
 - (void)layoutInWindow;
 - (void)savePosition;
+- (void)downloadEntries:(NSArray<NSString *> *)entries
+				  index:(NSUInteger)index
+				   files:(NSMutableArray<NSURL *> *)files
+				  errors:(NSMutableArray<NSString *> *)errors;
+- (void)beginFixLyricsWithFiles:(NSArray<NSDictionary *> *)files;
 @end
 
 @implementation MDImportButton
@@ -295,6 +304,12 @@ static UIViewController *MDTopViewController(void) {
 			case MDMenuActionSearch:
 				[strongSelf showSearchPrompt];
 				break;
+			case MDMenuActionBatchDownload:
+				[strongSelf showBatchPrompt];
+				break;
+			case MDMenuActionFixLyrics:
+				[strongSelf showFixLyricsPrompt];
+				break;
 			case MDMenuActionSettings:
 				[MDUI showSettingsInWindow:MDKeyWindow()];
 				break;
@@ -339,6 +354,7 @@ static UIViewController *MDTopViewController(void) {
 	picker.delegate = self;
 	picker.allowsMultipleSelection = YES;
 	self.picker = picker;
+	self.pickerMode = 0;
 
 	UIViewController *presenter = MDTopViewController();
 	if (!presenter) {
@@ -388,6 +404,202 @@ static UIViewController *MDTopViewController(void) {
 		initial:@""
 		completion:^(NSString *text) {
 		[weakSelf beginSearch:text];
+	}];
+}
+
+- (void)showBatchPrompt {
+	if (self.importing || self.downloading) {
+		return;
+	}
+	UIWindow *window = MDKeyWindow();
+	if (!window) {
+		return;
+	}
+
+	__weak MDImportButton *weakSelf = self;
+	[MDUI showMultilineInputInWindow:window
+		title:@"Batch Download"
+		subtitle:@"Paste one direct audio or YouTube link per line. Downloads run in order."
+		placeholder:@"Paste one URL per line…"
+		submit:@"Download All"
+		completion:^(NSString *text) {
+		[weakSelf beginBatchDownload:text];
+	}];
+}
+
+- (void)showFixLyricsPrompt {
+	if (self.importing || self.downloading) {
+		return;
+	}
+	UIWindow *window = MDKeyWindow();
+	if (!window) {
+		return;
+	}
+
+	__weak MDImportButton *weakSelf = self;
+	[MDUI showChoiceInWindow:window
+		title:@"Fix Lyrics"
+		subtitle:@"Add lyrics to songs you already have using LRCLIB."
+		options:@[
+			@{@"icon": @"music.note.list", @"color": [UIColor systemBlueColor], @"title": @"Scan Music Library", @"sub": @"Find songs in Music's folders"},
+			@{@"icon": @"folder", @"color": [UIColor systemGreenColor], @"title": @"Choose Files", @"sub": @"Pick audio files from Files"},
+		]
+		selection:^(NSInteger index) {
+		if (index == 0) {
+			[weakSelf scanLibraryForLyrics];
+		} else {
+			[weakSelf showLyricsFilePicker];
+		}
+	}];
+}
+
+- (void)scanLibraryForLyrics {
+	__weak MDImportButton *weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		NSArray<NSDictionary *> *files = [MDLibraryScanner audioFilesInLibrary];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[weakSelf beginFixLyricsWithFiles:files];
+		});
+	});
+}
+
+- (void)showLyricsFilePicker {
+	NSMutableOrderedSet<UTType *> *types = [NSMutableOrderedSet orderedSet];
+	for (NSString *extension in @[@"mp3", @"m4a", @"m4b", @"m4r", @"aac", @"wav", @"aif", @"aiff", @"caf", @"flac"]) {
+		UTType *type = [UTType typeWithFilenameExtension:extension];
+		if (type) {
+			[types addObject:type];
+		}
+	}
+	if (types.count == 0 || !UTTypeAudio) {
+		[self showResultWithTitle:@"Unsupported" message:@"This iOS version did not report any audio file types." success:NO];
+		return;
+	}
+	[types addObject:UTTypeAudio];
+
+	UIDocumentPickerViewController *picker =
+		[[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types.array asCopy:YES];
+	picker.delegate = self;
+	picker.allowsMultipleSelection = YES;
+	self.picker = picker;
+	self.pickerMode = 1;
+
+	UIViewController *presenter = MDTopViewController();
+	if (!presenter) {
+		MDLog(@"No view controller available to present the lyrics file picker.");
+		return;
+	}
+	self.hidden = YES;
+	[presenter presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)beginFixLyricsWithFiles:(NSArray<NSDictionary *> *)files {
+	if (files.count == 0) {
+		[self showResultWithTitle:@"No Songs Found"
+						  message:@"No audio files were found. Use Choose Files to pick the songs yourself."
+						  success:NO];
+		return;
+	}
+
+	self.downloading = YES;
+	self.enabled = NO;
+	self.alpha = 0.55;
+	self.progressTitle = @"Adding Lyrics…";
+	self.progressView = [MDUI showProgressInWindow:MDKeyWindow() title:@"Adding Lyrics…"];
+
+	__weak MDImportButton *weakSelf = self;
+	[MDHelperClient embedLyricsForFiles:files
+		progress:^(NSString *status) {
+		[weakSelf updateProgressWithStatus:status];
+	} completion:^(NSUInteger embedded, NSUInteger skipped) {
+		MDImportButton *strongSelf = weakSelf;
+		if (!strongSelf) {
+			return;
+		}
+		[MDUI hideProgress:strongSelf.progressView];
+		strongSelf.progressView = nil;
+		strongSelf.downloading = NO;
+		strongSelf.enabled = YES;
+		strongSelf.alpha = 1.0;
+		NSString *message = [NSString stringWithFormat:@"Embedded lyrics in %lu song%@. Skipped %lu.",
+			(unsigned long)embedded, embedded == 1 ? @"" : @"s", (unsigned long)skipped];
+		[strongSelf showResultWithTitle:@"Lyrics Updated" message:message success:embedded > 0];
+	}];
+}
+
+- (void)beginBatchDownload:(NSString *)input {
+	NSMutableArray<NSString *> *entries = [NSMutableArray array];
+	for (NSString *line in [input componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
+		for (NSString *piece in [line componentsSeparatedByString:@","]) {
+			NSString *value = [piece stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+			if (value.length == 0) {
+				continue;
+			}
+			if ([value rangeOfString:@"://"].location == NSNotFound) {
+				value = [@"https://" stringByAppendingString:value];
+			}
+			[entries addObject:value];
+		}
+	}
+
+	if (entries.count == 0) {
+		[self showResultWithTitle:@"No Links" message:@"Paste at least one URL to download." success:NO];
+		return;
+	}
+
+	__weak MDImportButton *weakSelf = self;
+	[self startOperation:^{
+		[weakSelf downloadEntries:entries index:0 files:[NSMutableArray array] errors:[NSMutableArray array]];
+	}];
+}
+
+- (void)downloadEntries:(NSArray<NSString *> *)entries
+				  index:(NSUInteger)index
+				   files:(NSMutableArray<NSURL *> *)files
+				  errors:(NSMutableArray<NSString *> *)errors {
+	if (index >= entries.count) {
+		self.downloading = NO;
+		self.enabled = YES;
+		self.alpha = 1.0;
+		[MDUI hideProgress:self.progressView];
+		self.progressView = nil;
+		self.pendingErrors = errors;
+		if (files.count > 0) {
+			[self beginImport:files];
+		} else {
+			[self showResultWithTitle:@"Downloads Failed"
+							  message:[errors componentsJoinedByString:@"\n"]
+							  success:NO];
+		}
+		return;
+	}
+
+	NSString *value = entries[index];
+	NSURL *url = [NSURL URLWithString:value];
+	self.progressTitle = [NSString stringWithFormat:@"Downloading %lu of %lu…",
+		(unsigned long)(index + 1), (unsigned long)entries.count];
+	if (!url) {
+		[errors addObject:[NSString stringWithFormat:@"Invalid URL: %@", value]];
+		[self downloadEntries:entries index:index + 1 files:files errors:errors];
+		return;
+	}
+
+	__weak MDImportButton *weakSelf = self;
+	[[MDDownloadManager sharedManager] downloadURL:url
+		progress:^(NSString *status) {
+		[weakSelf updateProgressWithStatus:status];
+	} completion:^(NSURL *localFileURL, NSError *error) {
+		MDImportButton *strongSelf = weakSelf;
+		if (!strongSelf) {
+			return;
+		}
+		if (localFileURL && !error) {
+			[files addObject:localFileURL];
+		} else {
+			[errors addObject:[NSString stringWithFormat:@"%@: %@", value,
+				error.localizedDescription ?: @"Failed"]];
+		}
+		[strongSelf downloadEntries:entries index:index + 1 files:files errors:errors];
 	}];
 }
 
@@ -487,10 +699,23 @@ static UIViewController *MDTopViewController(void) {
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller
 	didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+	NSInteger mode = self.pickerMode;
 	[self.picker dismissViewControllerAnimated:YES completion:^{
 		self.picker = nil;
 		self.hidden = NO;
-		if (urls.count > 0) {
+		if (urls.count == 0) {
+			return;
+		}
+		if (mode == 1) {
+			NSMutableArray<NSDictionary *> *files = [NSMutableArray array];
+			for (NSURL *url in urls) {
+				NSDictionary *metadata = [MDLibraryScanner metadataForPath:url.path];
+				if (metadata) {
+					[files addObject:metadata];
+				}
+			}
+			[self beginFixLyricsWithFiles:files];
+		} else {
 			[self beginImport:urls];
 		}
 	}];
@@ -534,6 +759,12 @@ static UIViewController *MDTopViewController(void) {
 - (void)showImportResultWithImported:(NSUInteger)imported errors:(NSArray<NSString *> *)errors {
 	NSString *message = nil;
 	BOOL success = imported > 0;
+	NSMutableArray<NSString *> *allErrors = [NSMutableArray arrayWithArray:errors ?: @[]];
+	if (self.pendingErrors.count > 0) {
+		[allErrors addObjectsFromArray:self.pendingErrors];
+		self.pendingErrors = nil;
+	}
+	errors = allErrors;
 
 	if (imported > 0) {
 		NSString *items = imported == 1 ? @"item" : @"items";

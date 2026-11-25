@@ -5,7 +5,7 @@ THEOS_PLATFORM_DEB_COMPRESSION_TYPE = gzip
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = MusicDrop
-MusicDrop_FILES = MusicDrop.xm MDImportButton.m MDUI.m MDPreferences.m MDDownloadManager.m MDHelperClient.m MDLyrics.m MDImporter.m MDServer.m MDLog.m
+MusicDrop_FILES = MusicDrop.xm MDImportButton.m MDUI.m MDPreferences.m MDDownloadManager.m MDHelperClient.m MDLyrics.m MDLibraryScanner.m MDImporter.m MDServer.m MDLog.m
 MusicDrop_FRAMEWORKS = UIKit Foundation AVFoundation CoreMedia UniformTypeIdentifiers QuartzCore
 MusicDrop_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 MusicDrop_LDFLAGS = -Wl,-segalign,4000

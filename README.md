@@ -6,7 +6,7 @@ The package is built and published with GitHub Actions. The Sileo repository is 
 
 ## Scope
 
-MusicDrop does not bypass DRM, rip Spotify tracks, or upload user files anywhere. Spotify URLs are recognized but cannot be downloaded because Spotify does not expose full-track audio to third parties.
+MusicDrop does not bypass DRM, extract Spotify audio, or upload user files anywhere. Spotify links are resolved to a track title using Spotify's public oEmbed endpoint, then matched to a YouTube video. Spotify's own encrypted audio is never accessed.
 
 Direct HTTPS downloads work without extra packages. YouTube downloads require FFmpeg and Python 3 (both available from `https://apt.procurs.us/`). MusicDrop fetches its own yt-dlp zipapp automatically and runs it with `python3`, since iOS will not execute a standalone downloader binary. Use them only for media you are allowed to save.
 
@@ -51,7 +51,12 @@ On the device:
 Tapping the button opens a menu:
 
 - **Import Files** — choose one or more local files.
-- **Download URL** — enter a direct audio URL or a YouTube URL.
+- **Download URL** — enter a direct audio URL, a YouTube URL, or a Spotify track link.
+- **Search by Name** — find a YouTube video by song or artist name.
+- **Batch Download** — paste several URLs, one per line, and download them in order.
+- **Fix Lyrics** — scan songs already in your library (or pick files) and embed lyrics from LRCLIB.
+- **Settings** — audio format, lyrics/artwork toggles, and cache cleanup.
+- **Help** — quick explanation of each option.
 
 Keep Music in the foreground during imports. MusicDrop requests background time, but the local file server runs inside the Music process and may be suspended.
 
@@ -82,7 +87,8 @@ If the workflow cannot commit the generated index, check that `GITHUB_TOKEN` has
 - Direct URL downloads reject HTML, unsupported formats, empty files, oversized files, non-HTTPS URLs, and private/local hosts.
 - YouTube downloads are single items, not playlists. They are converted to M4A and limited to 500 MB.
 - The helper fetches a pure-Python `yt-dlp` zipapp (v2025.10.14, the newest release compatible with Python 3.9) from GitHub on first use and refreshes it weekly, stored in `/var/mobile/Media/MusicDrop/bin/yt-dlp`. It is run with `/var/jb/usr/bin/python3`. An installed yt-dlp package is only a fallback. A standalone Mach-O binary cannot be used: iOS kills it with SIGKILL.
-- Spotify URLs return an error explaining that full tracks are DRM-protected.
+- Spotify track links are resolved to a title via Spotify's public oEmbed endpoint, then downloaded from the first matching YouTube result. Spotify's own encrypted audio is never accessed. If resolution fails, use **Search by Name**.
+- **Fix Lyrics** scans `/var/mobile/Media/iTunes_Control/Music` plus MusicDrop's own folders, embeds lyrics in place with FFmpeg, and reports how many songs were updated. Restart Music afterward so it reloads the files. You can also pick files from Files instead.
 - With FFmpeg installed, lyrics are fetched from LRCLIB and embedded into the audio file. They appear in Music under the Now Playing lyrics view. Songs without a lyrics match still import normally.
 - Files without embedded artwork get a generated MusicDrop cover.
 - Metadata is read with `AVAsset`: title, artist, album, album artist, genre, composer, year, track number/count, duration, and artwork.
@@ -222,9 +228,12 @@ Makefile                     Theos tweak build
 control                      package metadata
 MusicDrop.plist              MobileSubstrate filter for com.apple.Music
 MusicDrop.xm                 tweak constructor
-MDImportButton.h/.m          button, menus, picker, progress UI
-MDDownloadManager.h/.m       URL validation, direct downloads, download logic
+MDImportButton.h/.m          button, menus, picker, batch/download/lyrics UI
+MDUI.h/.m                    custom bottom sheets, inputs, progress, results
+MDPreferences.h/.m           persisted settings
+MDDownloadManager.h/.m       URL validation, direct/YouTube/Spotify downloads
 MDHelperClient.h/.m          tweak-side client for the helper daemon
+MDLibraryScanner.h/.m        scans library folders and reads file tags
 MDHelperProtocol.h           shared request keys and port
 musicdropd.m                 rootless LaunchDaemon (yt-dlp / FFmpeg runner)
 MDLyrics.h/.m                LRCLIB lookup and embedding via FFmpeg

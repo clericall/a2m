@@ -6,6 +6,8 @@ typedef NS_ENUM(NSInteger, MDMenuAction) {
 	MDMenuActionImportFiles = 0,
 	MDMenuActionDownloadURL,
 	MDMenuActionSearch,
+	MDMenuActionBatchDownload,
+	MDMenuActionFixLyrics,
 	MDMenuActionSettings,
 	MDMenuActionHelp,
 };
@@ -25,6 +27,21 @@ typedef NS_ENUM(NSInteger, MDMenuAction) {
 				   submit:(NSString *)submitTitle
 				  initial:(NSString *)initialText
 			   completion:(void (^)(NSString *text))completion;
+
+/// Multi-line input card for pasting several URLs.
++ (void)showMultilineInputInWindow:(UIWindow *)window
+							 title:(NSString *)title
+						  subtitle:(NSString *)subtitle
+					   placeholder:(NSString *)placeholder
+							submit:(NSString *)submitTitle
+						completion:(void (^)(NSString *text))completion;
+
+/// Choice card with two or more rows, returning the selected index.
++ (void)showChoiceInWindow:(UIWindow *)window
+					 title:(NSString *)title
+				  subtitle:(NSString *)subtitle
+				   options:(NSArray<NSDictionary *> *)options
+				 selection:(void (^)(NSInteger index))selection;
 
 /// Progress card. Returns a handle used by update/hide.
 + (UIView *)showProgressInWindow:(UIWindow *)window title:(NSString *)title;

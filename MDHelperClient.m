@@ -194,4 +194,44 @@ static BOOL MDWriteAll(int fd, const char *bytes, size_t length) {
 	});
 }
 
++ (void)embedLyricsForFiles:(NSArray<NSDictionary *> *)files
+				   progress:(nullable void (^)(NSString *status))progress
+				 completion:(void (^)(NSUInteger embedded, NSUInteger skipped))completion {
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		__block NSUInteger embedded = 0;
+		__block NSUInteger skipped = 0;
+		NSUInteger total = files.count;
+
+		for (NSUInteger index = 0; index < total; index++) {
+			NSDictionary *file = files[index];
+			NSString *path = file[@"path"];
+			if (progress) {
+				progress([NSString stringWithFormat:@"Adding lyrics %lu of %lu…",
+						  (unsigned long)(index + 1), (unsigned long)total]);
+			}
+			NSError *error = nil;
+			NSDictionary *response = [self runOperation:@{
+				MDHelperOperationKey: MDHelperOperationLyrics,
+				MDHelperPathKey: path ?: @"",
+				MDHelperTitleKey: file[@"title"] ?: @"",
+				MDHelperArtistKey: file[@"artist"] ?: @"",
+				MDHelperAlbumKey: file[@"album"] ?: @"",
+				MDHelperDurationKey: file[@"duration"] ?: @0,
+			} progress:nil error:&error];
+			NSString *resultPath = response[MDHelperResultPathKey];
+			if (!error && resultPath.length > 0) {
+				embedded++;
+			} else {
+				skipped++;
+			}
+		}
+
+		if (completion) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				completion(embedded, skipped);
+			});
+		}
+	});
+}
+
 @end

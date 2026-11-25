@@ -15,6 +15,12 @@ NS_ASSUME_NONNULL_BEGIN
 			progress:(nullable void (^)(NSString *status))progress
 		  completion:(void (^)(NSDictionary * _Nullable response, NSError * _Nullable error))completion;
 
+/// Embeds lyrics into a list of files one by one on a background queue.
+/// Each file is a dictionary with path/title/artist/album/duration keys.
++ (void)embedLyricsForFiles:(NSArray<NSDictionary *> *)files
+				   progress:(nullable void (^)(NSString *status))progress
+				 completion:(void (^)(NSUInteger embedded, NSUInteger skipped))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END

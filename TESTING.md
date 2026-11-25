@@ -172,6 +172,14 @@ Expected:
 - Invalid, `http://`, private-network, HTML, empty, and oversized responses fail before importing.
 - The button returns to its normal enabled state after every success and failure.
 
+## Batch download, Spotify links, Fix Lyrics
+
+1. Open **Batch Download**, paste three YouTube URLs (one per line) and submit. Confirm progress counts 1/3 → 3/3 and all three songs import.
+2. Open **Download URL** with a Spotify track link. The log should show `Helper: YouTube request for ...` after `Resolving Spotify link…`, and a matching song should import.
+3. Open **Fix Lyrics → Scan Music Library**. Confirm the progress card shows `Adding lyrics N of M…` and the result reports the number embedded/skipped. Restart Music and check the Now Playing lyrics view.
+4. Open **Fix Lyrics → Choose Files**, pick an audio file, and confirm the result.
+5. Open **Settings → Clear Cached Data** and confirm `/var/mobile/Media/MusicDrop/bin/yt-dlp` is removed, then that the next download re-fetches it.
+
 ## Lyrics
 
 1. With FFmpeg installed, import or download a well-known song (for example Queen — Bohemian Rhapsody).

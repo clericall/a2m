@@ -22,6 +22,7 @@ static unsigned long long const MDMaximumDownloadBytes = 500ULL * 1024ULL * 1024
 @interface MDDownloadManager ()
 
 @property (nonatomic, strong) dispatch_queue_t workQueue;
+- (void)resolveSpotifyQueryForURL:(NSURL *)url completion:(void (^)(NSString *query))completion;
 
 @end
 
@@ -385,8 +386,15 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 	}
 
 	if (MDIsSpotifyHost(url.host)) {
-		MDFinishDownload(completion, nil, MDDownloadError(20,
-			@"Spotify does not provide full-track audio downloads. Its offline files are encrypted and cannot be imported. Use a DRM-free file you own instead."));
+		MDReportProgress(progress, @"Resolving Spotify link…");
+		[self resolveSpotifyQueryForURL:url completion:^(NSString *query) {
+			if (query.length == 0) {
+				MDFinishDownload(completion, nil, MDDownloadError(21,
+					@"Could not resolve this Spotify link. Use Search by Name with the song title instead."));
+				return;
+			}
+			[self searchYouTube:query progress:progress completion:completion];
+		}];
 		return;
 	}
 
@@ -411,6 +419,41 @@ static NSString *MDLastUsefulOutputLine(NSString *output) {
 	}
 
 	[self downloadDirectURL:url progress:progress completion:completion];
+}
+
+- (void)resolveSpotifyQueryForURL:(NSURL *)url completion:(void (^)(NSString *query))completion {
+	NSString *absolute = url.absoluteString ?: @"";
+	NSString *encoded = [absolute stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]] ?: absolute;
+	NSURL *oEmbedURL = [NSURL URLWithString:[NSString stringWithFormat:@"https://open.spotify.com/oembed?url=%@", encoded]];
+	if (!oEmbedURL) {
+		if (completion) {
+			dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
+		}
+		return;
+	}
+
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:oEmbedURL
+													  cachePolicy:NSURLRequestUseProtocolCachePolicy
+												  timeoutInterval:15.0];
+	NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+		completionHandler:^(NSData *data, __unused NSURLResponse *response, NSError *error) {
+		NSString *query = nil;
+		if (!error && data.length > 0) {
+			id object = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+			if ([object isKindOfClass:[NSDictionary class]]) {
+				NSString *title = ((NSDictionary *)object)[@"title"];
+				if ([title isKindOfClass:[NSString class]] && title.length > 0) {
+					query = title;
+				}
+			}
+		}
+		if (completion) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				completion(query);
+			});
+		}
+	}];
+	[task resume];
 }
 
 - (void)searchYouTube:(NSString *)query

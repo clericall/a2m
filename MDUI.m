@@ -40,6 +40,8 @@ static UIColor *MDSubtext(void) {
 @property (nonatomic, copy, nullable) void (^menuSelection)(MDMenuAction action);
 @property (nonatomic, copy, nullable) void (^inputCompletion)(NSString *text);
 @property (nonatomic, strong) UITextField *inputField;
+@property (nonatomic, strong) UITextView *textView;
+@property (nonatomic, copy, nullable) void (^choiceSelection)(NSInteger index);
 @property (nonatomic, strong) UILabel *progressTitle;
 @property (nonatomic, strong) UILabel *progressDetail;
 @property (nonatomic, strong) UIProgressView *progressBar;
@@ -250,7 +252,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 	overlay.menuSelection = selection;
 
 	CGFloat width = MIN(window.bounds.size.width - 32.0, 380.0);
-	CGFloat height = 452.0;
+	CGFloat height = 584.0;
 	[overlay buildCardWithHeight:height bottom:YES];
 	UIView *card = overlay.card;
 
@@ -272,6 +274,8 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		@{@"icon": @"folder", @"color": [UIColor systemBlueColor], @"title": @"Import Files", @"sub": @"Add DRM-free audio from Files"},
 		@{@"icon": @"link", @"color": MDPink(), @"title": @"Download URL", @"sub": @"Direct audio or YouTube link"},
 		@{@"icon": @"magnifyingglass", @"color": [UIColor systemPurpleColor], @"title": @"Search by Name", @"sub": @"Find a track on YouTube"},
+		@{@"icon": @"list.bullet", @"color": [UIColor systemOrangeColor], @"title": @"Batch Download", @"sub": @"Paste several links at once"},
+		@{@"icon": @"text.bubble", @"color": [UIColor systemGreenColor], @"title": @"Fix Lyrics", @"sub": @"Add lyrics to existing songs"},
 		@{@"icon": @"gearshape", @"color": [UIColor systemGrayColor], @"title": @"Settings", @"sub": @"Lyrics, artwork, format"},
 		@{@"icon": @"questionmark.circle", @"color": [UIColor systemTealColor], @"title": @"Help", @"sub": @"How MusicDrop works"},
 	];
@@ -395,6 +399,143 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		card.transform = CGAffineTransformIdentity;
 	} completion:^(BOOL finished) {
 		[field becomeFirstResponder];
+	}];
+}
+
++ (void)showMultilineInputInWindow:(UIWindow *)window
+							 title:(NSString *)title
+						  subtitle:(NSString *)subtitle
+					   placeholder:(NSString *)placeholder
+							submit:(NSString *)submitTitle
+						completion:(void (^)(NSString *text))completion {
+	if (!window) {
+		return;
+	}
+	MDOverlayView *overlay = [[MDOverlayView alloc] initWithFrame:window.bounds];
+	overlay.inputCompletion = completion;
+
+	CGFloat height = 310.0;
+	[overlay buildCardWithHeight:height bottom:NO];
+	UIView *card = overlay.card;
+	CGFloat width = CGRectGetWidth(card.bounds);
+
+	UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 18, width - 40, 24)];
+	titleLabel.text = title;
+	titleLabel.textColor = MDText();
+	titleLabel.font = [UIFont systemFontOfSize:18 weight:UIFontWeightBold];
+	[card addSubview:titleLabel];
+
+	UILabel *subLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 46, width - 40, 36)];
+	subLabel.text = subtitle;
+	subLabel.textColor = MDSubtext();
+	subLabel.font = [UIFont systemFontOfSize:12];
+	subLabel.numberOfLines = 2;
+	[card addSubview:subLabel];
+
+	UITextView *textView = [[UITextView alloc] initWithFrame:CGRectMake(20, 90, width - 40, 100)];
+	textView.text = placeholder;
+	textView.textColor = MDSubtext();
+	textView.font = [UIFont systemFontOfSize:13];
+	textView.backgroundColor = MDRowColor();
+	textView.layer.cornerRadius = 10.0;
+	textView.autocapitalizationType = UITextAutocapitalizationTypeNone;
+	textView.autocorrectionType = UITextAutocorrectionTypeNo;
+	textView.keyboardType = UIKeyboardTypeURL;
+	[card addSubview:textView];
+	overlay.textView = textView;
+
+	UIButton *paste = [UIButton buttonWithType:UIButtonTypeCustom];
+	paste.frame = CGRectMake(20, 196, 90, 30);
+	paste.layer.cornerRadius = 8.0;
+	paste.backgroundColor = MDRowColor();
+	paste.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
+	[paste setTitle:@"Paste" forState:UIControlStateNormal];
+	[paste setTitleColor:MDPink() forState:UIControlStateNormal];
+	[paste addTarget:overlay action:@selector(pasteMultilineTapped:) forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:paste];
+
+	NSArray *formats = @[@"m4a", @"mp3", @"flac"];
+	UISegmentedControl *segmented = [[UISegmentedControl alloc] initWithItems:formats];
+	segmented.frame = CGRectMake(120, 196, width - 140, 30);
+	NSString *current = [MDPreferences downloadFormat];
+	NSUInteger selected = [formats indexOfObject:current];
+	segmented.selectedSegmentIndex = selected == NSNotFound ? 0 : (NSInteger)selected;
+	[segmented addTarget:overlay action:@selector(formatChanged:) forControlEvents:UIControlEventValueChanged];
+	[card addSubview:segmented];
+
+	UIButton *cancel = MDButton(@"Cancel", NO);
+	cancel.frame = CGRectMake(20, 238, (width - 52) / 2.0, 44);
+	[cancel addTarget:overlay action:@selector(cancelTapped:) forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:cancel];
+
+	UIButton *submit = MDButton(submitTitle, YES);
+	submit.frame = CGRectMake(20 + (width - 52) / 2.0 + 12, 238, (width - 52) / 2.0, 44);
+	[submit addTarget:overlay action:@selector(submitMultilineTapped:) forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:submit];
+
+	[window addSubview:overlay];
+	overlay.alpha = 0.0;
+	card.transform = CGAffineTransformMakeScale(0.94, 0.94);
+	[UIView animateWithDuration:0.2 animations:^{
+		overlay.alpha = 1.0;
+		card.transform = CGAffineTransformIdentity;
+	} completion:^(BOOL finished) {
+		[textView becomeFirstResponder];
+	}];
+}
+
++ (void)showChoiceInWindow:(UIWindow *)window
+					 title:(NSString *)title
+				  subtitle:(NSString *)subtitle
+				   options:(NSArray<NSDictionary *> *)options
+				 selection:(void (^)(NSInteger index))selection {
+	if (!window || options.count == 0) {
+		return;
+	}
+	for (UIView *view in window.subviews) {
+		if ([view isKindOfClass:[MDOverlayView class]]) {
+			[view removeFromSuperview];
+		}
+	}
+	MDOverlayView *overlay = [[MDOverlayView alloc] initWithFrame:window.bounds];
+	overlay.choiceSelection = selection;
+
+	CGFloat rowHeight = 62.0;
+	CGFloat height = 92.0 + options.count * (rowHeight + 6.0) + 16.0;
+	[overlay buildCardWithHeight:height bottom:NO];
+	UIView *card = overlay.card;
+	CGFloat width = CGRectGetWidth(card.bounds);
+
+	UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 18, width - 40, 24)];
+	titleLabel.text = title;
+	titleLabel.textColor = MDText();
+	titleLabel.font = [UIFont systemFontOfSize:18 weight:UIFontWeightBold];
+	[card addSubview:titleLabel];
+
+	UILabel *subLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 46, width - 40, 34)];
+	subLabel.text = subtitle;
+	subLabel.textColor = MDSubtext();
+	subLabel.font = [UIFont systemFontOfSize:12];
+	subLabel.numberOfLines = 2;
+	[card addSubview:subLabel];
+
+	CGFloat y = 90.0;
+	for (NSInteger index = 0; index < options.count; index++) {
+		NSDictionary *info = options[index];
+		UIView *row = MDRow(width, info[@"icon"], info[@"color"], info[@"title"], info[@"sub"], index, overlay, @selector(choiceRowTapped:));
+		CGRect frame = row.frame;
+		frame.origin.y = y;
+		row.frame = frame;
+		[card addSubview:row];
+		y += rowHeight + 6.0;
+	}
+
+	[window addSubview:overlay];
+	overlay.alpha = 0.0;
+	card.transform = CGAffineTransformMakeScale(0.94, 0.94);
+	[UIView animateWithDuration:0.2 animations:^{
+		overlay.alpha = 1.0;
+		card.transform = CGAffineTransformIdentity;
 	}];
 }
 
@@ -529,7 +670,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		return;
 	}
 	MDOverlayView *overlay = [[MDOverlayView alloc] initWithFrame:window.bounds];
-	[overlay buildCardWithHeight:420.0 bottom:YES];
+	[overlay buildCardWithHeight:500.0 bottom:YES];
 	UIView *card = overlay.card;
 	CGFloat width = CGRectGetWidth(card.bounds);
 
@@ -595,17 +736,22 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 	[segmented addTarget:overlay action:@selector(formatChanged:) forControlEvents:UIControlEventValueChanged];
 	[card addSubview:segmented];
 
-	UIButton *done = MDButton(@"Done", YES);
-	done.frame = CGRectMake(20, 420.0 - 60, width - 40, 44);
-	[done addTarget:overlay action:@selector(cancelTapped:) forControlEvents:UIControlEventTouchUpInside];
-	[card addSubview:done];
+	UIButton *clear = MDButton(@"Clear Cached Data", NO);
+	clear.frame = CGRectMake(20, y + 64, width - 40, 44);
+	[clear addTarget:overlay action:@selector(clearCacheTapped:) forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:clear];
 
-	UILabel *note = [[UILabel alloc] initWithFrame:CGRectMake(20, 420.0 - 82, width - 40, 18)];
-	note.text = @"YouTube and lyrics need FFmpeg installed";
+	UILabel *note = [[UILabel alloc] initWithFrame:CGRectMake(20, y + 114, width - 40, 18)];
+	note.text = @"Clear removes cached yt-dlp and temp files";
 	note.textColor = MDSubtext();
 	note.font = [UIFont systemFontOfSize:11];
 	note.textAlignment = NSTextAlignmentCenter;
 	[card addSubview:note];
+
+	UIButton *done = MDButton(@"Done", YES);
+	done.frame = CGRectMake(20, 500.0 - 60, width - 40, 44);
+	[done addTarget:overlay action:@selector(cancelTapped:) forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:done];
 
 	[window addSubview:overlay];
 	overlay.alpha = 0.0;
@@ -621,7 +767,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		return;
 	}
 	MDOverlayView *overlay = [[MDOverlayView alloc] initWithFrame:window.bounds];
-	[overlay buildCardWithHeight:430.0 bottom:YES];
+	[overlay buildCardWithHeight:500.0 bottom:YES];
 	UIView *card = overlay.card;
 	CGFloat width = CGRectGetWidth(card.bounds);
 
@@ -632,15 +778,15 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 	title.font = [UIFont systemFontOfSize:19 weight:UIFontWeightBold];
 	[card addSubview:title];
 
-	UILabel *body = [[UILabel alloc] initWithFrame:CGRectMake(20, 70, width - 40, 300)];
-	body.text = @"Import Files\nAdd DRM-free MP3, M4A, FLAC, WAV or video files from Files or iCloud Drive.\n\nDownload URL\nPaste a direct audio link or a YouTube link. Use Paste to grab a copied URL.\n\nSearch by Name\nEnter a song or artist name to find a matching YouTube video.\n\nSettings\nChoose audio format and control lyrics and artwork embedding.\n\nKeep Music open until the import finishes. Lyrics and YouTube need FFmpeg installed from a rootless repo.";
+	UILabel *body = [[UILabel alloc] initWithFrame:CGRectMake(20, 70, width - 40, 370)];
+	body.text = @"Import Files\nAdd DRM-free MP3, M4A, FLAC, WAV or video files from Files.\n\nDownload URL\nPaste a direct audio link, a YouTube link, or a Spotify link (resolved to a matching YouTube video).\n\nSearch by Name\nFind a track on YouTube by song or artist name.\n\nBatch Download\nPaste several URLs, one per line, to download them in order.\n\nFix Lyrics\nScan songs already in your library and embed lyrics from LRCLIB, or pick files yourself.\n\nSettings\nChoose audio format, toggle lyrics/artwork, and clear cached data.\n\nKeep Music open until the import finishes. Lyrics and YouTube need FFmpeg installed from a rootless repo.";
 	body.textColor = MDText();
 	body.font = [UIFont systemFontOfSize:12];
 	body.numberOfLines = 0;
 	[card addSubview:body];
 
 	UIButton *done = MDButton(@"Got it", YES);
-	done.frame = CGRectMake(20, 430.0 - 60, width - 40, 44);
+	done.frame = CGRectMake(20, 500.0 - 60, width - 40, 44);
 	[done addTarget:overlay action:@selector(cancelTapped:) forControlEvents:UIControlEventTouchUpInside];
 	[card addSubview:done];
 
@@ -659,7 +805,11 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 - (void)menuRowTapped:(UIButton *)sender;
 - (void)cancelTapped:(UIButton *)sender;
 - (void)submitTapped:(UIButton *)sender;
+- (void)submitMultilineTapped:(UIButton *)sender;
 - (void)pasteTapped:(UIButton *)sender;
+- (void)pasteMultilineTapped:(UIButton *)sender;
+- (void)choiceRowTapped:(UIButton *)sender;
+- (void)clearCacheTapped:(UIButton *)sender;
 - (void)formatChanged:(UISegmentedControl *)sender;
 - (void)toggleChanged:(UISwitch *)sender;
 @end
@@ -688,8 +838,44 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 	}
 }
 
+- (void)submitMultilineTapped:(__unused UIButton *)sender {
+	NSString *text = self.textView.text ?: @"";
+	BOOL placeholderOnly = [text isEqualToString:@"Paste one URL per line…"];
+	void (^completion)(NSString *) = self.inputCompletion;
+	self.inputCompletion = nil;
+	[self dismissAnimated:YES];
+	if (completion) {
+		completion(placeholderOnly ? @"" : text);
+	}
+}
+
 - (void)pasteTapped:(__unused UIButton *)sender {
 	self.inputField.text = [UIPasteboard generalPasteboard].string ?: @"";
+}
+
+- (void)pasteMultilineTapped:(__unused UIButton *)sender {
+	self.textView.text = [UIPasteboard generalPasteboard].string ?: @"";
+	self.textView.textColor = MDText();
+}
+
+- (void)choiceRowTapped:(UIButton *)sender {
+	void (^selection)(NSInteger) = self.choiceSelection;
+	[self dismissAnimated:YES];
+	if (selection) {
+		selection(sender.tag);
+	}
+}
+
+- (void)clearCacheTapped:(UIButton *)sender {
+	NSFileManager *manager = [NSFileManager defaultManager];
+	[manager removeItemAtPath:@"/var/mobile/Media/MusicDrop/bin/yt-dlp" error:nil];
+	for (NSString *directory in @[@"/var/mobile/Media/MusicDrop/tmp",
+								  @"/var/mobile/Media/MusicDrop/downloads"]) {
+		for (NSString *name in [manager contentsOfDirectoryAtPath:directory error:nil]) {
+			[manager removeItemAtPath:[directory stringByAppendingPathComponent:name] error:nil];
+		}
+	}
+	[sender setTitle:@"Cleared" forState:UIControlStateNormal];
 }
 
 - (void)formatChanged:(UISegmentedControl *)sender {
