@@ -16,6 +16,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)showProgressDetails;
 + (void)setShowProgressDetails:(BOOL)enabled;
 
++ (BOOL)nativeLyricsPatch;
++ (void)setNativeLyricsPatch:(BOOL)enabled;
+
 @end
 
 NS_ASSUME_NONNULL_END

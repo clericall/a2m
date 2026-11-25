@@ -671,7 +671,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		return;
 	}
 	MDOverlayView *overlay = [[MDOverlayView alloc] initWithFrame:window.bounds];
-	[overlay buildCardWithHeight:500.0 bottom:YES];
+	[overlay buildCardWithHeight:570.0 bottom:YES];
 	UIView *card = overlay.card;
 	CGFloat width = CGRectGetWidth(card.bounds);
 
@@ -686,6 +686,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		@{@"title": @"Embed Lyrics", @"sub": @"Fetch from LRCLIB and embed into the song", @"key": @"lyrics"},
 		@{@"title": @"Embed Artwork", @"sub": @"Add cover art and metadata on YouTube downloads", @"key": @"artwork"},
 		@{@"title": @"Detailed Progress", @"sub": @"Show download percentage and status", @"key": @"progress"},
+		@{@"title": @"Native Lyrics Patch", @"sub": @"Experimental - use Music's own lyrics view", @"key": @"patch"},
 	];
 	CGFloat y = 72.0;
 	for (NSDictionary *info in toggles) {
@@ -712,10 +713,13 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 			toggle.on = [MDPreferences embedLyrics];
 		} else if ([key isEqualToString:@"artwork"]) {
 			toggle.on = [MDPreferences embedArtwork];
-		} else {
+		} else if ([key isEqualToString:@"progress"]) {
 			toggle.on = [MDPreferences showProgressDetails];
+		} else {
+			toggle.on = [MDPreferences nativeLyricsPatch];
 		}
-		toggle.tag = [key isEqualToString:@"lyrics"] ? 1 : ([key isEqualToString:@"artwork"] ? 2 : 3);
+		toggle.tag = [key isEqualToString:@"lyrics"] ? 1 :
+			([key isEqualToString:@"artwork"] ? 2 : ([key isEqualToString:@"progress"] ? 3 : 4));
 		[toggle addTarget:overlay action:@selector(toggleChanged:) forControlEvents:UIControlEventValueChanged];
 		[row addSubview:toggle];
 		[card addSubview:row];
@@ -750,7 +754,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 	[card addSubview:note];
 
 	UIButton *done = MDButton(@"Done", YES);
-	done.frame = CGRectMake(20, 500.0 - 60, width - 40, 44);
+	done.frame = CGRectMake(20, 570.0 - 60, width - 40, 44);
 	[done addTarget:overlay action:@selector(cancelTapped:) forControlEvents:UIControlEventTouchUpInside];
 	[card addSubview:done];
 
@@ -891,8 +895,10 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		[MDPreferences setEmbedLyrics:sender.isOn];
 	} else if (sender.tag == 2) {
 		[MDPreferences setEmbedArtwork:sender.isOn];
-	} else {
+	} else if (sender.tag == 3) {
 		[MDPreferences setShowProgressDetails:sender.isOn];
+	} else {
+		[MDPreferences setNativeLyricsPatch:sender.isOn];
 	}
 }
 

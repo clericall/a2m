@@ -1,5 +1,6 @@
 #import "MDLyrics.h"
 #import "MDLog.h"
+#import "MDPreferences.h"
 
 #import <MediaPlayer/MediaPlayer.h>
 #import <objc/message.h>
@@ -12,7 +13,10 @@ static BOOL (*MDHasLyricsOriginal)(id, SEL) = NULL;
 static NSString *const MDLyricsPatchDisablePath = @"/var/mobile/Media/MusicDrop/disable_lyrics_patch";
 
 static BOOL MDPatchEnabled(void) {
-	return ![[NSFileManager defaultManager] fileExistsAtPath:MDLyricsPatchDisablePath];
+	if ([[NSFileManager defaultManager] fileExistsAtPath:MDLyricsPatchDisablePath]) {
+		return NO;
+	}
+	return [MDPreferences nativeLyricsPatch];
 }
 
 static NSString *MDStringFromItem(id item, NSArray<NSString *> *selectors) {

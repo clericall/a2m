@@ -4,6 +4,7 @@ static NSString *const MDEmbedLyricsKey = @"MusicDropEmbedLyrics";
 static NSString *const MDEmbedArtworkKey = @"MusicDropEmbedArtwork";
 static NSString *const MDDownloadFormatKey = @"MusicDropDownloadFormat";
 static NSString *const MDShowProgressKey = @"MusicDropShowProgress";
+static NSString *const MDNativeLyricsPatchKey = @"MusicDropNativeLyricsPatch";
 
 static BOOL MDBool(id value, BOOL fallback) {
 	return value ? [value boolValue] : fallback;
@@ -42,6 +43,14 @@ static BOOL MDBool(id value, BOOL fallback) {
 
 + (void)setShowProgressDetails:(BOOL)enabled {
 	[[NSUserDefaults standardUserDefaults] setBool:enabled forKey:MDShowProgressKey];
+}
+
++ (BOOL)nativeLyricsPatch {
+	return MDBool([[NSUserDefaults standardUserDefaults] objectForKey:MDNativeLyricsPatchKey], NO);
+}
+
++ (void)setNativeLyricsPatch:(BOOL)enabled {
+	[[NSUserDefaults standardUserDefaults] setBool:enabled forKey:MDNativeLyricsPatchKey];
 }
 
 @end
