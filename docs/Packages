@@ -14,8 +14,8 @@ Architecture: iphoneos-arm64
 Version: 1.10.0
 Installed-Size: 800
 Filename: debs/MusicDrop_1.10.0_iphoneos-arm64.deb
-Size: 232598
-MD5sum: 57870950cc764dc9b93315d06664010f
-SHA1: 91805d2a7b64a5bbe852f3746ba298f6029f8599
-SHA256: a69ba768da86789aeffe69842cc0425a9495721ab9e30ef9437c2e9a8ca4c69c
+Size: 232608
+MD5sum: 7911c941397ac32616336f40b3cdb24c
+SHA1: fce73e9653e1b14826c6cacbe7146dd225264f30
+SHA256: f5ebb5f118519c302b0f63e7c3f81f69b46017087bd28a750a4bdb880cace1d2
 
