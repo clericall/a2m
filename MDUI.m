@@ -278,7 +278,7 @@ static UIButton *MDButton(NSString *title, BOOL primary) {
 		@{@"icon": @"text.bubble", @"color": [UIColor systemGreenColor], @"title": @"Fix Lyrics", @"sub": @"Add lyrics to existing songs"},
 		@{@"icon": @"gearshape", @"color": [UIColor systemGrayColor], @"title": @"Settings", @"sub": @"Lyrics, artwork, format"},
 		@{@"icon": @"questionmark.circle", @"color": [UIColor systemTealColor], @"title": @"Help", @"sub": @"How MusicDrop works"},
-		@{@"icon": @"ladybug.fill", @"color": [UIColor systemRedColor], @"title": @"Lyrics Debug", @"sub":<arg_value:6124c78e>			@"Dump Music's lyrics classes to the log"},
+		@{@"icon": @"ladybug.fill", @"color": [UIColor systemRedColor], @"title": @"Lyrics Debug", @"sub": @"Dump Music lyrics classes to the log"},
 	];
 	CGFloat y = 86.0;
 	for (NSInteger index = 0; index < rows.count; index++) {
