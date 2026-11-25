@@ -11,11 +11,11 @@ Depends: firmware (>= 15.0), mobilesubstrate
 Priority: optional
 Tag: purpose::extension, compatible::ios15, compatible::ios16
 Architecture: iphoneos-arm64
-Version: 1.10.1
+Version: 1.10.2
 Installed-Size: 800
-Filename: debs/MusicDrop_1.10.1_iphoneos-arm64.deb
-Size: 233090
-MD5sum: 97c2498ca766b3c7b9f22ac14c89ab55
-SHA1: dacf1258a3832c86c856b434af47ed87874f34c2
-SHA256: bb1b6947686eac6813558a2cff013ba2ca8193e722f461e93a55c15cd44b1f02
+Filename: debs/MusicDrop_1.10.2_iphoneos-arm64.deb
+Size: 232030
+MD5sum: 01f6b72a404a3ae6913b3777f5aad312
+SHA1: 33fec1c1c707d27ff593e7281023ebc3f9afe4d9
+SHA256: f32b3795ba11779fce2c2af4b3e591309b28fa48af85cb452947531043b2b02d
 
