@@ -14,7 +14,7 @@ When FFmpeg is installed, MusicDrop looks up lyrics on [LRCLIB](https://lrclib.n
 
 iOS 10 and later do not read embedded lyrics for local files — the native Lyrics view is fed by Apple Music's catalog. MusicDrop hooks `MPNowPlayingContentItem`'s `lyrics` and `hasLyrics` methods and returns a user-provided `MPNowPlayingInfoLyricsItem` built from the saved plain-lyrics sidecar. That makes Music's own Lyrics button show lyrics for local and downloaded songs. If FFmpeg is missing, no lookup happens. If LRCLIB has no match, the song imports normally without lyrics.
 
-The native patch is **off by default** because it is experimental. Enable it in **Settings → Native Lyrics Patch** and restart Music. If it causes instability, turn it back off, or create an empty file at `/var/mobile/Media/MusicDrop/disable_lyrics_patch` with Filza and restart Music.
+The native patch is **off by default** because it is experimental. Enable it in **Settings → Native Lyrics Patch** and restart Music. It also hooks Music's Now Playing button delegate to force the Lyrics button visible. If Music throws an exception, the patch writes `/var/mobile/Media/MusicDrop/lyrics_patch_crashed` and disables itself on the next launch. Delete that file to retry. To disable permanently, create an empty file at `/var/mobile/Media/MusicDrop/disable_lyrics_patch` with Filza.
 
 iOS does not allow the Music app to launch external binaries. YouTube downloads and lyrics therefore run in a small rootless LaunchDaemon (`com.musiccc.musicdropd`) that ships inside the package. The tweak sends requests to it over `127.0.0.1:45454`. The daemon is started by the post-install script and at every boot.
 
